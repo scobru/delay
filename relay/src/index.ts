@@ -42,8 +42,16 @@ import {
   getHardwarePeerId,
   setupPeerExchange,
   latchDomain,
-  kprs
+  kprs,
+  activeDomain,
+  activePort,
+  networkIdentity as zenNetworkIdentity,
+  setNetworkIdentityRefreshedCallback,
+  startNetworkIdentityRefresh,
+  startBootPeerWatchdog
 } from "./utils/zen-network";
+// @ts-ignore
+import { buildStatus, signStatus } from "zen/lib/status.js";
 
 // Route Imports
 
@@ -110,6 +118,29 @@ let path_public = serverConfig.publicPath;
  * @returns {Promise<void>}
  */
 async function initializeServer() {
+  let relayKeyPair: any = null;
+  let cachedStatus: string | null = null;
+
+  async function refreshStatus() {
+    if (!relayKeyPair) return;
+    try {
+      const payload = buildStatus({
+        pub: relayKeyPair.pub,
+        domain: activeDomain || (zenNetworkIdentity ? zenNetworkIdentity.domain : null) || null,
+        ip4: zenNetworkIdentity ? (zenNetworkIdentity.ip || null) : null,
+        ip6: zenNetworkIdentity ? (zenNetworkIdentity.ip6 || null) : null,
+        port: port as number,
+        peers: Array.from(kprs)
+          .filter(u => u.endsWith("/zen")),
+        mcp: false,
+      });
+      cachedStatus = await signStatus(payload, relayKeyPair);
+      loggers.server.info("🔑 ZEN signed /status payload refreshed");
+    } catch (e: any) {
+      loggers.server.error(`⚠️ Failed to generate signed status: ${e.message}`);
+    }
+  }
+
   // Welcome message with ASCII art logo
   const welcomeMessage = serverConfig.welcomeMessage;
   console.log(welcomeMessage);
@@ -197,6 +228,32 @@ async function initializeServer() {
   // --- ZEN Peers Endpoint ---
   app.get("/peers", (req, res) => {
     res.status(200).json(Array.from(kprs));
+  });
+
+  // --- ZEN Cryptographic Status Endpoint ---
+  app.get(["/status", "/status/"], (req, res) => {
+    res.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end(cachedStatus || "");
+  });
+
+  // --- ZEN Well-Known Peers Endpoint ---
+  app.get("/.well-known/peers.json", (req, res) => {
+    const formattedPeers = Array.from(kprs)
+      .map(url => {
+        try {
+          const parsed = new URL(url);
+          return parsed.host;
+        } catch {
+          return url.replace(/^wss?:\/\//, "").split("/")[0];
+        }
+      })
+      .filter((value, index, self) => self.indexOf(value) === index);
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.status(200).json({ peers: formattedPeers });
   });
 
   // ===== SECURITY: CORS Configuration =====
@@ -531,6 +588,12 @@ async function initializeServer() {
   const serverUrl = activeDomain ? `wss://${activeDomain}:${port}${zenConfig.path || "/zen"}` : null;
   setupPeerExchange(zen, serverUrl);
 
+  // Hook, compile, and start ZEN status compliance systems
+  setNetworkIdentityRefreshedCallback(refreshStatus);
+  await refreshStatus();
+  startNetworkIdentityRefresh(port as number);
+  startBootPeerWatchdog(zen, relayConfig.peers);
+
   loggers.server.info("✅ ZEN Instance successfully initialized");
 
   // Initialize connection counters
@@ -600,7 +663,6 @@ async function initializeServer() {
     */
 
   // Initialize Relay Identity
-  let relayKeyPair: any = null;
   if (relayKeysConfig.seaKeypair) {
     try {
       relayKeyPair = JSON.parse(relayKeysConfig.seaKeypair);
