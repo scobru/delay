@@ -6,9 +6,8 @@
  * will be unpinned from IPFS to free up storage.
  */
 
-import type { IGunInstance } from "gun";
 import { loggers } from "./logger";
-import { wormholeConfig, ipfsConfig, authConfig } from "../config/env-config";
+import { wormholeConfig, ipfsConfig } from "../config/env-config";
 import { GUN_PATHS, getGunNode } from "./gun-paths";
 
 const log = loggers.server || console;
@@ -24,9 +23,9 @@ interface WormholeTransfer {
 
 /**
  * Start the wormhole cleanup scheduler
- * @param gun - GunDB instance
+ * @param zen - Zen instance
  */
-export function startWormholeCleanup(gun: IGunInstance): void {
+export function startWormholeCleanup(zen: any): void {
   if (!wormholeConfig.cleanupEnabled) {
     log.debug({}, "🔄 Wormhole cleanup scheduler disabled by configuration");
     return;
@@ -45,14 +44,14 @@ export function startWormholeCleanup(gun: IGunInstance): void {
     "🔄 Starting wormhole cleanup scheduler"
   );
 
-  // Run after initial delay to let GunDB initialize
+  // Run after initial delay to let ZEN initialize
   setTimeout(() => {
-    runWormholeCleanup(gun);
+    runWormholeCleanup(zen);
   }, 10000);
 
   // Set interval for periodic cleanup
   cleanupInterval = setInterval(() => {
-    runWormholeCleanup(gun);
+    runWormholeCleanup(zen);
   }, wormholeConfig.cleanupIntervalMs);
 }
 
@@ -69,16 +68,15 @@ export function stopWormholeCleanup(): void {
 
 /**
  * Run a single cleanup iteration
- * @param gun - GunDB instance
+ * @param zen - Zen instance
  */
-async function runWormholeCleanup(gun: IGunInstance): Promise<void> {
+async function runWormholeCleanup(zen: any): Promise<void> {
   if (isProcessing) {
     log.debug({}, "🔄 Wormhole cleanup already in progress, skipping");
     return;
   }
 
   isProcessing = true;
-  const zen = (global as any).zenInstance;
 
   try {
     const now = Date.now();
@@ -90,19 +88,8 @@ async function runWormholeCleanup(gun: IGunInstance): Promise<void> {
       "🔄 Scanning for orphaned wormhole transfers"
     );
 
-    // Read all transfers from Gun
-    const gunTransfers = await getWormholeTransfers(gun);
-    const zenTransfers = zen ? await getWormholeTransfers(zen) : [];
-    
-    // Combine and deduplicate by code
-    const allTransfers = [...gunTransfers];
-    const seenCodes = new Set(gunTransfers.map(t => t.code));
-    for (const t of zenTransfers) {
-      if (!seenCodes.has(t.code)) {
-        allTransfers.push(t);
-        seenCodes.add(t.code);
-      }
-    }
+    // Read all transfers from Zen
+    const allTransfers = await getWormholeTransfers(zen);
 
     if (allTransfers.length === 0) {
       log.debug({}, "🔄 No wormhole transfers found");
@@ -124,11 +111,10 @@ async function runWormholeCleanup(gun: IGunInstance): Promise<void> {
           continue;
         }
 
-        // Skip if already completed (check both)
-        const gunCompleted = await checkTransferCompleted(gun, code);
-        const zenCompleted = zen ? await checkTransferCompleted(zen, code) : false;
+        // Skip if already completed
+        const zenCompleted = await checkTransferCompleted(zen, code);
         
-        if (gunCompleted || zenCompleted) {
+        if (zenCompleted) {
           continue;
         }
 
@@ -147,23 +133,14 @@ async function runWormholeCleanup(gun: IGunInstance): Promise<void> {
           await unpinFromIPFS(data.ipfsHash);
         }
 
-        // Remove from Gun index
-        getGunNode(gun, GUN_PATHS.SHOGUN_WORMHOLE)
+        // Remove from Zen index
+        getGunNode(zen, GUN_PATHS.SHOGUN_WORMHOLE)
           .get(GUN_PATHS.WORMHOLE_TRANSFERS)
           .get(code)
           .put(null as any);
 
         // Remove transfer metadata
-        gun.get(code).put(null as any);
-        
-        // Remove from ZEN too if present
-        if (zen) {
-          getGunNode(zen, GUN_PATHS.SHOGUN_WORMHOLE)
-            .get(GUN_PATHS.WORMHOLE_TRANSFERS)
-            .get(code)
-            .put(null as any);
-          zen.get(code).put(null as any);
-        }
+        zen.get(code).put(null as any);
 
         cleaned++;
       } catch (err) {
@@ -183,10 +160,10 @@ async function runWormholeCleanup(gun: IGunInstance): Promise<void> {
 }
 
 /**
- * Get all wormhole transfers from Gun
+ * Get all wormhole transfers from Zen
  */
 async function getWormholeTransfers(
-  gun: IGunInstance
+  zen: any
 ): Promise<Array<{ code: string; data: WormholeTransfer }>> {
   return new Promise((resolve) => {
     const transfers: Array<{ code: string; data: WormholeTransfer }> = [];
@@ -198,7 +175,7 @@ async function getWormholeTransfers(
       seen.add(key);
 
       // For each code in the index, fetch the full transfer data
-      gun.get(key).once((transferData: any) => {
+      zen.get(key).once((transferData: any) => {
         if (transferData && transferData.createdAt) {
           transfers.push({
             code: key,
@@ -212,7 +189,7 @@ async function getWormholeTransfers(
       });
     };
 
-    getGunNode(gun, GUN_PATHS.SHOGUN_WORMHOLE)
+    getGunNode(zen, GUN_PATHS.SHOGUN_WORMHOLE)
       .get(GUN_PATHS.WORMHOLE_TRANSFERS)
       .map()
       .once(handler);
@@ -227,9 +204,9 @@ async function getWormholeTransfers(
 /**
  * Check if a transfer has been completed
  */
-async function checkTransferCompleted(gun: IGunInstance, code: string): Promise<boolean> {
+async function checkTransferCompleted(zen: any, code: string): Promise<boolean> {
   return new Promise((resolve) => {
-    gun.get(`${code}-received`).once((data: any) => {
+    zen.get(`${code}-received`).once((data: any) => {
       resolve(data?.status === "completed");
     });
 

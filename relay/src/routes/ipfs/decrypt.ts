@@ -2,6 +2,8 @@ import { Router, Request, Response } from "express";
 import { loggers } from "../../utils/logger";
 import { ipfsConfig } from "../../config";
 import type { IpfsRequestOptions } from "./types";
+// @ts-ignore
+import ZEN from "zen";
 
 const router: Router = Router();
 
@@ -222,14 +224,13 @@ router.get("/cat/:cid/decrypt", async (req: Request, res: Response) => {
 
           if (isEncryptedData && encryptedObject && token) {
             loggers.server.debug({ cid }, `🔓 Attempting decryption with token`);
-            const SEA = await import("gun/sea.js");
 
             let decrypted;
             try {
               const tokenForDecrypt =
                 typeof token === "string" ? token : Array.isArray(token) ? token[0] : "";
               if (typeof tokenForDecrypt === "string") {
-                decrypted = await SEA.default.decrypt(encryptedObject, tokenForDecrypt);
+                decrypted = await (ZEN as any).decrypt(encryptedObject, tokenForDecrypt);
               } else {
                 decrypted = null;
               }

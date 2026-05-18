@@ -51,6 +51,9 @@ vi.mock("fs", () => {
         }),
         access: vi.fn().mockResolvedValue(undefined),
       },
+      constants: {
+        R_OK: 4,
+      },
     },
     constants: {
       R_OK: 4,
@@ -88,7 +91,7 @@ describe("Service Logs Path Traversal Security", () => {
 
   it("should reject path traversal with '..'", async () => {
     const response = await request(app)
-      .get("/api/v1/system/services/../../etc/passwd/logs")
+      .get("/api/v1/system/services/..%2f..%2fetc%2fpasswd/logs")
       .set("Authorization", "Bearer valid-token");
 
     expect(response.status).toBe(400);

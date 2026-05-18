@@ -1,16 +1,5 @@
-import { IGunChain } from "gun/types/gun";
-
-/**
- * Utility to wait for data to appear in a Zen/Gun node.
- * This is useful for handling synchronization latency in decentralized networks.
- * 
- * @param node - The Gun chain node to watch
- * @param attempts - Number of retry attempts
- * @param delay - Delay between attempts in ms
- * @returns The data once found, or null if timed out
- */
 export async function waitForZenData(
-  node: IGunChain<any, any, any, any>,
+  node: any,
   timeoutMs: number = 8000
 ): Promise<any> {
   return new Promise((resolve) => {

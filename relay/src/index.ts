@@ -5,12 +5,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import setSelfAdjustingInterval from "self-adjusting-interval";
 import { fileURLToPath } from "url";
-import Gun from "gun";
-import "gun/sea";
-// import "gun/lib/stats"; // Disabled: causes EACCES errors by trying to write to /root/.local/state/zen/
-
-// import "gun/axe"; // Disabled: causes infinite event-loop blocks / 504 Gateway Timeouts on writes in cyclic nets
-import "./utils/bullet-catcher";
 // @ts-ignore
 import ZEN from "zen";
 import "zen/lib/multicast.js";
@@ -437,6 +431,7 @@ async function initializeServer() {
   loggers.server.info({ peers }, "🔍 Peers");
 
   // Initialize Gun with storage (SQLite, radisk, or S3)
+  // Initialize ZEN with storage (SQLite, radisk, or S3)
   const dataDir = storageConfig.dataDir;
   loggers.server.info({ dataDir }, "📁 Data directory");
 
@@ -446,12 +441,13 @@ async function initializeServer() {
   let store: any = null;
 
   if (storageType === "sqlite") {
+    // Keep gun.db filename for full SQLite database backwards compatibility (no lost nodes/users)
     const dbPath = path.join(dataDir, "gun.db");
     store = new SQLiteStore({
       dbPath: dbPath,
       file: "radata",
     });
-    loggers.server.info("📁 Using SQLite storage for Gun");
+    loggers.server.info("📁 Using SQLite storage for ZEN");
   } else if (storageType === "s3") {
     const s3Conf = storageConfig.s3;
     if (!s3Conf?.endpoint || !s3Conf?.accessKeyId || !s3Conf?.secretAccessKey) {
@@ -471,153 +467,81 @@ async function initializeServer() {
           endpoint: s3Conf.endpoint,
           bucket: s3Conf.bucket,
         },
-        "🪣 Using S3/MinIO storage for Gun"
+        "🪣 Using S3/MinIO storage for ZEN"
       );
     }
   }
 
-  // Configure Gun options based on storage selection
-  const gunConfig: any = {
+  // Configure ZEN options based on storage selection
+  const zenOptions: any = {
     super: true,
     web: server,
+    ws: { path: zenConfig.path || "/zen" }, // Nest path for zen wire
+    radisk: true,
     isValid: hasValidToken,
-    uuid: relayConfig.name,
     localStorage: false,
-    wire: true,
-    axe: false,
-    rfs: true,
-    wait: 500,
-    webrtc: true,
-    peers: peers,
-    chunk: 1000,
-    pack: 1000,
-    jsonify: true,
+    axe: true,
+    peers: peers, // Share the same peers
+    store: store,
     stats: false, // Prevent writing to /root/.local/state/zen/
   };
 
-  // Logic to ensure storage consistency
-  if (store) {
-    // When using a custom store (SQLite or S3), we bind it and enable radisk
-    gunConfig.store = store;
-    gunConfig.radisk = true; // Custom stores hook into radisk
-    // We do NOT set 'file' here to avoid Gun checking/creating default files unnecessarily
+  if (!store) {
+    zenOptions.file = dataDir;
+  }
 
-    if (storageConfig.disableRadisk) {
-      loggers.server.warn(
-        "⚠️ DISABLE_RADISK setting ignored because a custom storage adapter (SQLite/S3) is active."
-      );
-    }
-  } else {
-    // Fallback to default Gun file storage (Radisk default) or memory-only
-    gunConfig.radisk = !storageConfig.disableRadisk;
+  loggers.server.info({ path: zenConfig.path || "/zen", dataDir }, "🚀 Initializing ZEN Instance...");
 
-    if (gunConfig.radisk) {
-      gunConfig.file = dataDir; // Only set 'file' when using default file storage
-      loggers.server.info("📁 Using file-based radisk storage (default)");
-    } else {
-      loggers.server.warn(
-        "⚠️ Persistent storage DISABLED (radisk=false). Data will be in-memory only."
-      );
+  // Discover network identity and Hardware ID
+  const networkIdentity = await discoverNetworkIdentity(port as number);
+  loggers.server.info(`🌐 Network Identity Discovered: ${JSON.stringify(networkIdentity)}`);
+
+  const hwidRaw = getHardwarePeerId();
+  let ppid = null;
+  if (hwidRaw) {
+    try {
+      const seed = await ZEN.hash(hwidRaw, null, null, { encode: "base62" });
+      const ppair = await ZEN.pair(null, { seed });
+      ppid = ppair.pub;
+      loggers.server.info(`🔑 ZEN Peer ID (stable): ${ppid.slice(0, 9)}...`);
+    } catch (e: any) {
+      loggers.server.warn(`⚠️ ZEN pid derivation failed: ${e.message}`);
     }
   }
 
+  if (ppid) {
+    zenOptions.pid = ppid;
+  }
 
+  const zen = new ZEN(zenOptions);
+  zen._graph; // Force relay initialization as per examples
 
-  const gun = (Gun as any)(gunConfig);
+  // Initialize Gun Alias Guard (running over Zen instance natively)
+  gunAliasGuard(zen);
 
-  // Initialize Gun Alias Guard to prevent duplicate usernames
-  gunAliasGuard(gun);
-  // Store gun instance in express app for access from routes
-  app.set("gunInstance", gun);
-  // Store the gun storage adapter for stats access
+  // Store Zen instance in express app for access from routes (using both mappings for compatibility)
+  app.set("zenInstance", zen);
+  app.set("gunInstance", zen); 
   app.set("gunStore", store);
 
-  // Initialize ZEN alongside Gun
-  if (zenConfig.enabled) {
-    const zenDataDir = zenConfig.dataDir;
-    // Ensure directory exists
-    if (!fs.existsSync(zenDataDir)) {
-      fs.mkdirSync(zenDataDir, { recursive: true });
-    }
+  (global as any).zenInstance = zen;
+  (global as any).gunInstance = zen;
 
-    let zenStore: any = null;
-    if (storageType === "sqlite") {
-      const zenDbPath = path.join(zenDataDir, "zen.db");
-      zenStore = new SQLiteStore({
-        dbPath: zenDbPath,
-        file: "radata",
-      });
-      loggers.server.info("📁 Using SQLite storage for ZEN");
-    }
+  const activeDomain = networkIdentity.domain || networkIdentity.ip;
+  const serverUrl = activeDomain ? `wss://${activeDomain}:${port}${zenConfig.path || "/zen"}` : null;
+  setupPeerExchange(zen, serverUrl);
 
-    const zenOptions: any = {
-      super: true,
-      web: server,
-      ws: { path: zenConfig.path }, // Nest path for zen wire
-      radisk: true,
-      isValid: hasValidToken,
-      localStorage: false,
-      axe: true,
-      peers: peers, // Share the same peers
-      store: zenStore,
-      stats: false, // Prevent writing to /root/.local/state/zen/
-    };
-
-    if (!zenStore) {
-      zenOptions.file = zenDataDir;
-    }
-
-    loggers.server.info({ path: zenConfig.path, dataDir: zenDataDir }, "🚀 Initializing ZEN Instance...");
-
-    // Discover network identity and Hardware ID
-    const networkIdentity = await discoverNetworkIdentity(port as number);
-    loggers.server.info(`🌐 Network Identity Discovered: ${JSON.stringify(networkIdentity)}`);
-
-    const hwidRaw = getHardwarePeerId();
-    let ppid = null;
-    if (hwidRaw) {
-      try {
-        const seed = await ZEN.hash(hwidRaw, null, null, { encode: "base62" });
-        const ppair = await ZEN.pair(null, { seed });
-        ppid = ppair.pub;
-        loggers.server.info(`🔑 ZEN Peer ID (stable): ${ppid.slice(0, 9)}...`);
-      } catch (e: any) {
-        loggers.server.warn(`⚠️ ZEN pid derivation failed: ${e.message}`);
-      }
-    }
-
-    if (ppid) {
-      zenOptions.pid = ppid;
-    }
-
-    const zen = new ZEN(zenOptions);
-    zen._graph; // Force relay initialization as per examples
-    app.set("zenInstance", zen);
-    (global as any).zenInstance = zen;
-
-    // Hook ZEN to StatsTracker
-    zen.on("hi", (peer: any) => {
-      if (!peer || !peer.wire) return;
-      const addr = peer.url || peer.id || "unknown";
-      statsTracker.patchSocket(peer.wire, addr, "zen");
-    });
-
-    const activeDomain = networkIdentity.domain || networkIdentity.ip;
-    const serverUrl = activeDomain ? `wss://${activeDomain}:${port}${zenConfig.path}` : null;
-    setupPeerExchange(zen, serverUrl);
-
-    loggers.server.info("✅ ZEN Instance initialized alongside Gun");
-  }
+  loggers.server.info("✅ ZEN Instance successfully initialized");
 
   // Initialize connection counters
   let totalConnections = 0;
   let activeWires = 0;
 
-  // Hook Stats Tracker to Gun's wire peers
-  gun.on("hi", (peer: any) => {
+  // Hook Stats Tracker to ZEN's wire peers
+  zen.on("hi", (peer: any) => {
     if (!peer || !peer.wire) return;
     const addr = peer.url || peer.id || "unknown";
-    statsTracker.patchSocket(peer.wire, addr);
+    statsTracker.patchSocket(peer.wire, addr, "zen");
 
     // Synchronize local counters
     totalConnections += 1;
@@ -628,7 +552,7 @@ async function initializeServer() {
     loggers.server.debug({ activeWires, addr }, `Connection opened`);
   });
 
-  gun.on("bye", (peer: any) => {
+  zen.on("bye", (peer: any) => {
     // Small delay to let StatsTracker update its map
     setTimeout(() => {
       activeWires = statsTracker.getStats().connectedPeers;
@@ -639,7 +563,7 @@ async function initializeServer() {
 
   // Start wormhole cleanup scheduler for orphaned transfer cleanup
   if (wormholeConfig.enabled) {
-    startWormholeCleanup(gun);
+    startWormholeCleanup(zen);
     loggers.server.info(`✅ Wormhole cleanup started`);
   } else {
     loggers.server.info(`⏭️ Wormhole cleanup disabled (WORMHOLE_ENABLED=false)`);
@@ -688,7 +612,7 @@ async function initializeServer() {
 
   if (!relayKeyPair) {
     loggers.server.warn("⚠️ No Relay KeyPair configured, generating ephemeral pair");
-    relayKeyPair = await (Gun as any).SEA.pair();
+    relayKeyPair = await ZEN.pair();
   }
 
   app.set("relayUserPub", relayKeyPair.pub);
@@ -711,9 +635,6 @@ async function initializeServer() {
   app.set("IPFS_API_TOKEN", IPFS_API_TOKEN);
   app.set("IPFS_GATEWAY_URL", IPFS_GATEWAY_URL);
 
-  // Esponi l'istanza Gun globalmente per le route
-  (global as any).gunInstance = gun;
-
   // ===== SECURITY: Production Error Handler =====
   // This must be added AFTER all routes to catch any unhandled errors
   // In production, it sanitizes error messages to prevent information disclosure
@@ -728,7 +649,7 @@ async function initializeServer() {
   app.use(express.static(publicPath));
 
   // Set up relay stats database
-  const db = getGunNode(gun, GUN_PATHS.RELAYS).get(host);
+  const db = getGunNode(zen, GUN_PATHS.RELAYS).get(host);
 
   // Pulse stats are now driven by StatsTracker
 
@@ -872,10 +793,10 @@ async function initializeServer() {
         }
       }
 
-      getGunNode(gun, GUN_PATHS.RELAYS).get(host).put(relayData);
+      getGunNode(zen, GUN_PATHS.RELAYS).get(host).put(relayData);
 
       // Also save to a separate pulse namespace for easier querying
-      getGunNode(gun, GUN_PATHS.RELAYS).get(host).get("pulse").put(pulse);
+      getGunNode(zen, GUN_PATHS.RELAYS).get(host).get("pulse").put(pulse);
 
       // Log pulse only in debug mode to avoid console spam
       loggers.server.debug(
@@ -911,7 +832,7 @@ async function initializeServer() {
   setInterval(async () => {
     loggers.server.info("🧹 Starting scheduled Alias Maintenance...");
     try {
-      const stats = await performAliasMaintenance(gun);
+      const stats = await performAliasMaintenance(zen);
       loggers.server.info(stats, "✅ Scheduled Alias Maintenance completed");
     } catch (err: any) {
       loggers.server.error({ err: err.message }, "❌ Scheduled Alias Maintenance failed");
@@ -922,7 +843,7 @@ async function initializeServer() {
   setTimeout(async () => {
     loggers.server.info("🧹 Starting startup Alias Maintenance...");
     try {
-      await performAliasMaintenance(gun);
+      await performAliasMaintenance(zen);
     } catch (err: any) {
       loggers.server.error({ err: err.message }, "❌ Startup Alias Maintenance failed");
     }
@@ -967,7 +888,7 @@ async function initializeServer() {
 
   return {
     server,
-    gun,
+    gun: zen,
     addSystemLog,
     addTimeSeriesPoint,
     shutdown,
