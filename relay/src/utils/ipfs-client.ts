@@ -380,4 +380,4 @@ async function ipfsUpload(
   throw lastError;
 }
 
-export { ipfsRequest, ipfsUpload, checkIpfsReady, waitForIpfs };
+export { ipfsRequest, ipfsUpload };

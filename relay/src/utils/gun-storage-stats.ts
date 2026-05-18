@@ -228,4 +228,4 @@ export async function getGunStorageStats(store?: any): Promise<GunStorageStats> 
   }
 }
 
-export default { getGunStorageStats };
+

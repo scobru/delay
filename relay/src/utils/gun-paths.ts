@@ -36,7 +36,7 @@ export const GUN_PATHS = {
   WORMHOLE_TRANSFERS: "transfers", // Relative to SHOGUN_WORMHOLE
 } as const;
 
-export type GunPath = (typeof GUN_PATHS)[keyof typeof GUN_PATHS];
+type GunPath = (typeof GUN_PATHS)[keyof typeof GUN_PATHS];
 
 /**
  * Helper to get a Gun node from a unified path string

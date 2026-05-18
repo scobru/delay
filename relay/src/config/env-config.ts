@@ -191,8 +191,3 @@ export const loggingConfig = config.logging;
 export const packageConfig = config.package;
 export const zenConfig = config.zen;
 
-// ============================================================================
-// EXPORT DEFAULT
-// ============================================================================
-
-export default config;

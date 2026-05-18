@@ -19,7 +19,7 @@ export interface ApiKeyData {
   lastUsed?: number;
 }
 
-export interface ApiKeyStore {
+interface ApiKeyStore {
   keys: Record<string, ApiKeyData>; // Hashed token -> Data
 }
 
@@ -38,7 +38,7 @@ function ensureDataDir() {
 /**
  * Load store from disk
  */
-export function loadStore(): ApiKeyStore {
+function loadStore(): ApiKeyStore {
   if (storeCache) return storeCache;
 
   ensureDataDir();

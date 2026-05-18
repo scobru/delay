@@ -17,7 +17,7 @@ let adminPasswordHash: string | null = null;
  * Get stored admin password hash (or compute on first use)
  * @returns {string|null} The admin password hash, or null if not configured
  */
-export function getAdminPasswordHash(): string | null {
+function getAdminPasswordHash(): string | null {
   if (!adminPasswordHash && authConfig.adminPassword) {
     adminPasswordHash = hashToken(authConfig.adminPassword);
   }

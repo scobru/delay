@@ -151,78 +151,7 @@ export function sanitizeForLog(data: any): any {
   return sanitized;
 }
 
-/**
- * Create timeout wrapper for promises
- */
-export function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  errorMessage: string = "Operation timeout"
-): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMessage)), timeoutMs)),
-  ]);
-}
 
-/**
- * User operation lock manager to prevent race conditions
- */
-class UserLockManager {
-  private locks = new Map<string, Promise<unknown>>();
-
-  /**
-   * Execute an operation with a lock for a specific user
-   * Ensures only one operation per user executes at a time
-   */
-  async executeWithLock<T>(userKey: string, operation: () => Promise<T>): Promise<T> {
-    const normalizedKey = userKey.toLowerCase();
-
-    // Wait for any existing operation to complete
-    const existingLock = this.locks.get(normalizedKey);
-    if (existingLock) {
-      await existingLock;
-    }
-
-    // Create new lock promise
-    // Use a wrapper to avoid referencing lockPromise before assignment
-    const lockPromise: Promise<T> = new Promise((resolve, reject) => {
-      const operationPromise = (async () => {
-        try {
-          return await operation();
-        } finally {
-          // Remove lock when done
-          const currentLock = this.locks.get(normalizedKey);
-          if (currentLock === lockPromise) {
-            this.locks.delete(normalizedKey);
-          }
-        }
-      })();
-
-      operationPromise.then(resolve).catch(reject);
-    });
-
-    this.locks.set(normalizedKey, lockPromise);
-    return lockPromise;
-  }
-
-  /**
-   * Check if a user has an active lock
-   */
-  hasLock(userKey: string): boolean {
-    return this.locks.has(userKey.toLowerCase());
-  }
-
-  /**
-   * Clear all locks (for testing/cleanup)
-   */
-  clearAll(): void {
-    this.locks.clear();
-  }
-}
-
-// Export singleton instance
-export const userLockManager = new UserLockManager();
 
 /**
  * Validate chainId against whitelist of allowed chain IDs

@@ -71,8 +71,7 @@ export const RESTART_REQUIRED_KEYS = [
   "DISABLE_RADISK",
 ] as const;
 
-export type RestartRequiredKey = (typeof RESTART_REQUIRED_KEYS)[number];
-export type ConfigKey = HotReloadableKey | RestartRequiredKey;
+type RestartRequiredKey = (typeof RESTART_REQUIRED_KEYS)[number];
 
 // ============================================================================
 // RUNTIME STORE
@@ -82,19 +81,6 @@ export type ConfigKey = HotReloadableKey | RestartRequiredKey;
  * In-memory store for runtime configuration overrides
  */
 const runtimeOverrides: Map<string, string> = new Map();
-
-/**
- * Get the current value for a config key
- * Priority: Runtime override > Environment variable > undefined
- */
-export function getConfigValue(key: string): string | undefined {
-  // Check runtime override first
-  if (runtimeOverrides.has(key)) {
-    return runtimeOverrides.get(key);
-  }
-  // Fall back to environment variable
-  return process.env[key];
-}
 
 /**
  * Set a runtime override for a hot-reloadable config key
@@ -109,24 +95,6 @@ export function setRuntimeValue(key: HotReloadableKey, value: string): boolean {
   runtimeOverrides.set(key, value);
   loggers.server.info({ key, value }, "🔄 Runtime config updated (hot-reload)");
   return true;
-}
-
-/**
- * Clear a runtime override, reverting to env value
- */
-export function clearRuntimeValue(key: string): void {
-  runtimeOverrides.delete(key);
-}
-
-/**
- * Get all current runtime overrides
- */
-export function getRuntimeOverrides(): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [key, value] of runtimeOverrides) {
-    result[key] = value;
-  }
-  return result;
 }
 
 /**
@@ -295,17 +263,4 @@ export function getAllConfig(): ConfigInfo[] {
   });
 }
 
-export default {
-  HOT_RELOADABLE_KEYS,
-  RESTART_REQUIRED_KEYS,
-  getConfigValue,
-  setRuntimeValue,
-  clearRuntimeValue,
-  getRuntimeOverrides,
-  isHotReloadable,
-  requiresRestart,
-  readEnvFile,
-  parseEnvFile,
-  updateEnvFile,
-  getAllConfig,
-};
+

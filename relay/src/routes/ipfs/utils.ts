@@ -1,67 +1,10 @@
 import { ipfsConfig } from "../../config";
-import { loggers } from "../../utils/logger";
-import type { IpfsRequestOptions } from "./types";
+
 
 // IPFS Configuration
 export const IPFS_API_URL: string = ipfsConfig.apiUrl;
 export const IPFS_API_TOKEN: string | undefined = ipfsConfig.apiToken;
-export const IPFS_GATEWAY_URL: string = ipfsConfig.gatewayUrl;
 
-/**
- * Get the IPFS JWT token if configured
- */
-export function getIpfsJwtToken(): string | null {
-  if (IPFS_API_TOKEN) {
-    return IPFS_API_TOKEN;
-  }
-  return null;
-}
-
-/**
- * Get the IPFS auth header for API requests
- */
-export function getIpfsAuthHeader(): string | null {
-  const token = getIpfsJwtToken();
-  if (token) {
-    return `Bearer ${token}`;
-  }
-  return null;
-}
-
-/**
- * Create standardized IPFS request options
- */
-export function createIpfsRequestOptions(
-  path: string,
-  method: string = "POST"
-): IpfsRequestOptions {
-  const options: IpfsRequestOptions = {
-    hostname: "127.0.0.1",
-    port: 5001,
-    path,
-    method,
-    headers: {
-      "Content-Length": "0",
-    },
-  };
-
-  if (IPFS_API_TOKEN) {
-    options.headers["Authorization"] = `Bearer ${IPFS_API_TOKEN}`;
-  }
-
-  return options;
-}
-
-/**
- * Verify wallet signature for user authentication
- */
-export async function verifyWalletSignature(addr: string, sig: string): Promise<boolean> {
-  if (!sig || !sig.startsWith("0x") || sig.length < 100) {
-    return false;
-  }
-  loggers.server.warn("Wallet signature verification disabled (Blockchain features removed)");
-  return false;
-}
 
 /**
  * Detect content type from file extension

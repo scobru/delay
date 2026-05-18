@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/public/dashboard/src/main.tsx"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}"
+  ],
+  "ignore": [
+    "src/public/dashboard/src/vite-env.d.ts",
+    "src/public/dashboard/src/views/ConsoleLogs.tsx",
+    "src/public/dashboard/src/views/Explore.tsx",
+    "src/public/dashboard/vite.config.ts"
+  ],
+  "ignoreDependencies": [
+    "pino-pretty",
+    "@types/vis",
+    "react-vis-network-graph",
+    "@tailwindcss/vite",
+    "@vitejs/plugin-react",
+    "autoprefixer",
+    "daisyui",
+    "postcss",
+    "tailwindcss"
+  ]
+}

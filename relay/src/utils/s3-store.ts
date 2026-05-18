@@ -26,7 +26,7 @@ type GetCallback = (err: Error | null, data: string | null) => void;
 type PutCallback = (err: Error | null, ok: number | null) => void;
 type ListCallback = (file: string | null) => void;
 
-export interface S3StoreOptions {
+interface S3StoreOptions {
   endpoint: string;
   accessKeyId: string;
   secretAccessKey: string;

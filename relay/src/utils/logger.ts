@@ -45,14 +45,9 @@ const baseLogger = pino(loggerOptions, transport ? pino.transport(transport) : u
  * Create a child logger with a specific module name
  * @param moduleName - Name of the module (e.g., 'relay-user', 'storage-deals')
  */
-export function createLogger(moduleName: string): pino.Logger {
+function createLogger(moduleName: string): pino.Logger {
   return baseLogger.child({ module: moduleName });
 }
-
-/**
- * Default logger for general use
- */
-export const logger = baseLogger;
 
 /**
  * Pre-configured loggers for common modules
@@ -66,4 +61,3 @@ export const loggers = {
   visualGraph: createLogger("visual-graph"),
 };
 
-export default logger;

@@ -14,7 +14,7 @@ const log = loggers.server;
 /**
  * Memory usage statistics
  */
-export interface MemoryStats {
+interface MemoryStats {
   heapUsedMB: number;
   heapTotalMB: number;
   externalMB: number;
@@ -33,7 +33,7 @@ const DEFAULT_HEAP_LIMIT_MB = parseInt(
 /**
  * Get current memory usage statistics
  */
-export function getMemoryUsage(): MemoryStats {
+function getMemoryUsage(): MemoryStats {
   const memUsage = process.memoryUsage();
   const heapUsedMB = Math.round(memUsage.heapUsed / (1024 * 1024));
   const heapTotalMB = Math.round(memUsage.heapTotal / (1024 * 1024));
@@ -52,7 +52,7 @@ export function getMemoryUsage(): MemoryStats {
 /**
  * Log current memory usage with a label
  */
-export function logMemoryUsage(label: string): void {
+function logMemoryUsage(label: string): void {
   const stats = getMemoryUsage();
   log.info(
     {
@@ -70,7 +70,7 @@ export function logMemoryUsage(label: string): void {
  * Trigger garbage collection if available (requires --expose-gc flag)
  * Returns true if GC was triggered, false otherwise
  */
-export function triggerGC(): boolean {
+function triggerGC(): boolean {
   if (global.gc) {
     try {
       global.gc();
@@ -95,7 +95,7 @@ export function checkMemoryPressure(warningThreshold = 80): boolean {
  * Perform memory cleanup with optional GC trigger
  * Used between batches of heavy operations
  */
-export function performMemoryCleanup(label?: string): void {
+function performMemoryCleanup(label?: string): void {
   const beforeStats = getMemoryUsage();
   const gcTriggered = triggerGC();
 
@@ -117,7 +117,7 @@ export function performMemoryCleanup(label?: string): void {
 /**
  * Log memory warning if usage is high
  */
-export function checkAndWarnMemory(operation: string): boolean {
+function checkAndWarnMemory(operation: string): boolean {
   if (checkMemoryPressure(75)) {
     const stats = getMemoryUsage();
     log.warn(

@@ -58,7 +58,7 @@ export function startWormholeCleanup(zen: any): void {
 /**
  * Stop the wormhole cleanup scheduler
  */
-export function stopWormholeCleanup(): void {
+function stopWormholeCleanup(): void {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
     cleanupInterval = null;
