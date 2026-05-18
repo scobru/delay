@@ -118,7 +118,7 @@ function Charts() {
         <div className="card-body flex-row items-center justify-between flex-wrap gap-4">
           <div>
             <h2 className="card-title text-2xl">📊 Live Telemetry Charts</h2>
-            <p className="text-base-content/70">Real-time GunDB protocol monitoring</p>
+            <p className="text-base-content/70">Real-time ZenDB protocol monitoring</p>
           </div>
           <div className="flex gap-2">
             <span className="badge badge-ghost">{new Date().toLocaleTimeString()}</span>
@@ -167,7 +167,6 @@ function Charts() {
                   />
                   <Legend verticalAlign="top" height={36} />
                   <Area type="monotone" dataKey="Total" stroke="#00ffe5" fill="#00ffe5" fillOpacity={0.1} isAnimationActive={false} />
-                  <Area type="monotone" dataKey="Gun" stroke="#8884d8" fill="#8884d8" fillOpacity={0.4} isAnimationActive={false} />
                   <Area type="monotone" dataKey="Zen" stroke="#ff00e5" fill="#ff00e5" fillOpacity={0.4} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -191,7 +190,6 @@ function Charts() {
                   />
                   <Legend verticalAlign="top" height={36} />
                   <Area type="monotone" dataKey="Total" stroke="#00b4ff" fill="#00b4ff" fillOpacity={0.1} isAnimationActive={false} />
-                  <Area type="monotone" dataKey="Gun" stroke="#8884d8" fill="#8884d8" fillOpacity={0.4} isAnimationActive={false} />
                   <Area type="monotone" dataKey="Zen" stroke="#ff00e5" fill="#ff00e5" fillOpacity={0.4} isAnimationActive={false} />
                 </AreaChart>
               </ResponsiveContainer>

@@ -166,7 +166,7 @@ function LiveStats() {
           <div className="stat-title text-[10px] font-black opacity-30 uppercase tracking-[0.15em] mb-1">Active Peers</div>
           <div className="text-4xl font-black tracking-tighter text-primary">{stats?.connectedPeers || 0}</div>
           <div className="text-[10px] font-bold opacity-40 mt-2 uppercase tracking-wide">
-             Gun: <span className="text-success">{stats?.gunPeers || 0}</span> / ZEN: <span className="text-secondary">{stats?.zenPeers || 0}</span>
+             ZEN: <span className="text-secondary">{stats?.zenPeers || 0}</span>
           </div>
           <div className="absolute -right-2 -bottom-2 opacity-5 scale-150 rotate-12 group-hover:rotate-0 transition-transform duration-500">
              <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>
@@ -300,8 +300,8 @@ function LiveStats() {
                         </div>
                      </td>
                      <td className="py-4">
-                        <span className={`badge badge-sm border-0 font-black px-3 ${p.engine === 'zen' ? 'bg-secondary/10 text-secondary' : 'bg-success/10 text-success'}`}>
-                          {p.engine?.toUpperCase() || 'GUN'}
+                        <span className="badge badge-sm border-0 font-black px-3 bg-secondary/10 text-secondary">
+                          ZEN
                         </span>
                       </td>
                      <td className="py-4">
@@ -361,7 +361,7 @@ function LiveStats() {
                        <span className="font-mono text-xs font-bold opacity-60 group-hover:opacity-100 transition-opacity truncate block max-w-md">{relay.host}</span>
                     </td>
                     <td className="py-4">
-                       <span className="text-xs font-bold opacity-40">{relay.endpoint || '/gun'}</span>
+                       <span className="text-xs font-bold opacity-40">{relay.endpoint || '/zen'}</span>
                     </td>
                     <td className="px-8 py-4 text-right">
                        <span className="text-[10px] font-black px-2 py-1 rounded bg-base-300 opacity-60 uppercase tracking-widest">

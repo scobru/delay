@@ -11,7 +11,7 @@ function Explore() {
   const navigate = useNavigate()
 
   const sections = [
-    { title: 'Graph Explorer', description: 'Inspect GunDB nodes and traverse the graph.', path: '/graph-explorer', icon: '🔍', color: 'primary' },
+    { title: 'Graph Explorer', description: 'Inspect ZenDB nodes and traverse the graph.', path: '/graph-explorer', icon: '🔍', color: 'primary' },
     { title: 'Visual Graph', description: 'Interactive visualization of the node network.', path: '/visual-graph', icon: '🕸️', color: 'secondary' },
     { title: 'Network Stats', description: 'Live peers, relay performance, and resources.', path: '/stats', icon: '📊', color: 'success' },
     { title: 'IPFS Files', description: 'Manage pinned files and storage.', path: '/files', icon: '📁', color: 'warning' }

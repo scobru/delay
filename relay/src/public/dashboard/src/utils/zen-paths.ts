@@ -1,14 +1,14 @@
 /**
- * Unified GunDB paths for the Shogun network
+ * Unified ZenDB paths for the Shogun network
  *
  * These paths are shared between delay and shogun-mule
  * to ensure consistent network discovery and communication.
  *
  * NOTE: This is a copy for the dashboard frontend. Keep in sync with
- * relay/src/utils/gun-paths.ts
+ * relay/src/utils/gun-paths.ts (or zen-paths.ts)
  */
 
-export const GUN_PATHS = {
+export const ZEN_PATHS = {
   // Base
   SHOGUN: "shogun",
   SHOGUN_INDEX: "shogun/index",
@@ -42,4 +42,4 @@ export const GUN_PATHS = {
   WORMHOLE_TRANSFERS: "transfers", // Relative to SHOGUN_WORMHOLE
 } as const;
 
-type GunPath = (typeof GUN_PATHS)[keyof typeof GUN_PATHS];
+

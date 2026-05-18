@@ -415,13 +415,6 @@ function Settings() {
                     </div>
                   </div>
                   <div className="bg-base-200 p-3 rounded-lg">
-                    <div className="text-sm font-medium">🔷 GunDB (radata)</div>
-                    <div className="text-lg font-bold">{storageStats.radata.formatted}</div>
-                    <div className="text-xs text-base-content/60">
-                      {storageStats.radata.files} files
-                    </div>
-                  </div>
-                  <div className="bg-base-200 p-3 rounded-lg">
                     <div className="text-sm font-medium">📌 IPFS</div>
                     <div className="text-lg font-bold">{storageStats.breakdown.ipfs.formatted}</div>
                     <div className="text-xs text-base-content/60">
@@ -429,12 +422,12 @@ function Settings() {
                     </div>
                   </div>
                   <div className="bg-base-200 p-3 rounded-lg">
-                    <div className="text-sm font-medium">🔫 GunDB (local)</div>
+                    <div className="text-sm font-medium">🌊 ZEN (database)</div>
                     <div className="text-lg font-bold">
                       {storageStats.breakdown.gundb.formatted}
                     </div>
                     <div className="text-xs text-base-content/60">
-                      {storageStats.breakdown.gundb.files} files
+                      {storageStats.breakdown.gundb.files} records/files
                     </div>
                   </div>
                   <div className="bg-base-200 p-3 rounded-lg">

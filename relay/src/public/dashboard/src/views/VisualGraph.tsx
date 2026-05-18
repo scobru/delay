@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Graph from "../components/Graph";
 import { useAuth } from "../context/AuthContext";
-import { GUN_PATHS } from "../utils/gun-paths";
+import { ZEN_PATHS } from "../utils/zen-paths";
 
 interface GraphNode {
   id: string;
@@ -25,9 +25,9 @@ function VisualGraph() {
     edges: [],
   });
   const [loading, setLoading] = useState(false);
-  const [path, setPath] = useState<string>(GUN_PATHS.SHOGUN);
-  const [engine, setEngine] = useState<"gun" | "zen">("zen"); // Default to ZEN as per user request
+  const [path, setPath] = useState<string>(ZEN_PATHS.SHOGUN);
   const [peerUrl, setPeerUrl] = useState("");
+
   const [nodeCount, setNodeCount] = useState(0);
 
   // Graph options
@@ -71,8 +71,7 @@ function VisualGraph() {
 
     try {
       // Use the generic node endpoint
-      const apiPath = engine === "zen" ? "zen/node" : "node";
-      const response = await fetch(`/api/v1/system/${apiPath}/${encodeURIComponent(nodePath)}`, {
+      const response = await fetch(`/api/v1/system/zen/node/${encodeURIComponent(nodePath)}`, {
         headers: getAuthHeaders(),
       });
 
@@ -167,7 +166,7 @@ function VisualGraph() {
 
   useEffect(() => {
     // Initial exploration
-    exploreData(GUN_PATHS.SHOGUN);
+    exploreData(ZEN_PATHS.SHOGUN);
   }, []);
 
   return (
@@ -178,24 +177,14 @@ function VisualGraph() {
             <div>
               <h2 className="card-title text-2xl">🕸️ Visual Graph Explorer</h2>
               <p className="text-base-content/70">
-                Visualize and explore GunDB nodes interactively
+                Visualize and explore ZenDB nodes interactively
               </p>
             </div>
 
             <div className="flex flex-col items-end gap-2">
-              <div className="join">
-                <button 
-                  className={`btn btn-sm join-item ${engine === 'gun' ? 'btn-success' : 'btn-outline opacity-50'}`}
-                  onClick={() => setEngine('gun')}
-                >
-                  Gun
-                </button>
-                <button 
-                  className={`btn btn-sm join-item ${engine === 'zen' ? 'btn-secondary' : 'btn-outline opacity-50'}`}
-                  onClick={() => setEngine('zen')}
-                >
-                  ZEN
-                </button>
+              <div className="badge badge-secondary gap-2 py-3 px-4 font-bold text-xs">
+                <span className="w-2 h-2 rounded-full bg-success animate-pulse"></span>
+                ZEN ACTIVE
               </div>
               <div className="flex gap-2">
                 <span className="badge badge-lg">Nodes: {nodeCount}</span>
@@ -212,7 +201,7 @@ function VisualGraph() {
                 type="text"
                 value={path}
                 onChange={(e) => setPath(e.target.value)}
-                placeholder="Enter GunDB path (e.g. delay/relays)"
+                placeholder="Enter ZenDB path (e.g. delay/relays)"
                 className="input input-bordered join-item w-full"
               />
               <button type="submit" className="btn btn-primary join-item" disabled={loading}>
@@ -241,8 +230,8 @@ function VisualGraph() {
             <button
               className="btn btn-xs btn-outline"
               onClick={() => {
-                setPath(GUN_PATHS.SHOGUN);
-                exploreData(GUN_PATHS.SHOGUN);
+                setPath(ZEN_PATHS.SHOGUN);
+                exploreData(ZEN_PATHS.SHOGUN);
               }}
             >
               Root
@@ -250,8 +239,8 @@ function VisualGraph() {
             <button
               className="btn btn-xs btn-outline"
               onClick={() => {
-                setPath(GUN_PATHS.RELAYS);
-                exploreData(GUN_PATHS.RELAYS);
+                setPath(ZEN_PATHS.RELAYS);
+                exploreData(ZEN_PATHS.RELAYS);
               }}
             >
               Relays
@@ -259,8 +248,8 @@ function VisualGraph() {
             <button
               className="btn btn-xs btn-outline"
               onClick={() => {
-                setPath(GUN_PATHS.SHOGUN_WORMHOLE);
-                exploreData(GUN_PATHS.SHOGUN_WORMHOLE);
+                setPath(ZEN_PATHS.SHOGUN_WORMHOLE);
+                exploreData(ZEN_PATHS.SHOGUN_WORMHOLE);
               }}
             >
               Wormhole
@@ -268,8 +257,8 @@ function VisualGraph() {
             <button
               className="btn btn-xs btn-outline"
               onClick={() => {
-                setPath(GUN_PATHS.SHOGUN_INDEX);
-                exploreData(GUN_PATHS.SHOGUN_INDEX);
+                setPath(ZEN_PATHS.SHOGUN_INDEX);
+                exploreData(ZEN_PATHS.SHOGUN_INDEX);
               }}
             >
               Index
@@ -277,8 +266,8 @@ function VisualGraph() {
             <button
               className="btn btn-xs btn-outline"
               onClick={() => {
-                setPath(GUN_PATHS.ANNAS_ARCHIVE);
-                exploreData(GUN_PATHS.ANNAS_ARCHIVE);
+                setPath(ZEN_PATHS.ANNAS_ARCHIVE);
+                exploreData(ZEN_PATHS.ANNAS_ARCHIVE);
               }}
             >
               Anna's Archive

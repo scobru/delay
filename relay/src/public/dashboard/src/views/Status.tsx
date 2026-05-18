@@ -78,7 +78,7 @@ function Status() {
                 {health?.relayName || "Shogun Relay"}
               </h2>
               <p className="text-primary-content/70 max-w-md leading-relaxed">
-                Decentralized infrastructure powered by <span className="text-white font-semibold">GunDB</span> & <span className="text-white font-semibold">IPFS</span>. Running efficiently on your local node.
+                Decentralized infrastructure powered by <span className="text-white font-semibold">ZenDB</span> & <span className="text-white font-semibold">IPFS</span>. Running efficiently on your local node.
               </p>
             </div>
           </div>
@@ -104,8 +104,6 @@ function Status() {
           <div className="stat-title text-sm opacity-60 font-medium">Connected Peers</div>
           <div className="text-3xl font-bold tracking-tight my-1">{stats?.connectedPeers || 0}</div>
           <div className="text-xs opacity-50 flex gap-2">
-             <span>Gun: {stats?.gunPeers || 0}</span>
-             <span>•</span>
              <span>ZEN: {stats?.zenPeers || 0}</span>
           </div>
         </div>
@@ -147,7 +145,6 @@ function Status() {
           </div>
           <div className="stat-title text-sm opacity-60 font-medium">Active Engines</div>
           <div className="flex gap-2 mt-2">
-             <span className="badge gradient-primary border-0 font-bold">Gun</span>
              <span className="badge gradient-secondary border-0 font-bold">ZEN</span>
              <span className="badge bg-neutral text-neutral-content border-0 font-bold">IPFS</span>
           </div>
@@ -218,7 +215,7 @@ function Status() {
              <h4 className="font-bold text-sm uppercase opacity-40 mb-4 tracking-widest">Network Health</h4>
              <ul className="space-y-4">
                 <li className="flex items-center justify-between">
-                   <span className="text-sm">Gun Relay</span>
+                   <span className="text-sm">ZEN Relay</span>
                    <span className="status-dot online"></span>
                 </li>
                 <li className="flex items-center justify-between">

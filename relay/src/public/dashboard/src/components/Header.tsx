@@ -6,7 +6,7 @@ const pageTitles: Record<string, { title: string; description: string }> = {
   "/": { title: "Relay Status", description: "Global network health and node metrics" },
   "/stats": { title: "Live Metrics", description: "Real-time performance monitoring" },
   "/files": { title: "Storage Manager", description: "IPFS pin management and cloud uploads" },
-  "/explore": { title: "Data Explorer", description: "Deep dive into GunDB graph structures" },
+  "/explore": { title: "Data Explorer", description: "Deep dive into ZenDB graph structures" },
   "/network": { title: "Peer Network", description: "P2P connection statistics and topology" },
   "/settings": { title: "Configuration", description: "Security keys and system preferences" },
   "/api-keys": { title: "Access Tokens", description: "Manage your API authentication keys" },

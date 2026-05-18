@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { GUN_PATHS } from "../utils/gun-paths";
+import { ZEN_PATHS } from "../utils/zen-paths";
 
 interface NodeData {
   [key: string]: any;
@@ -8,14 +8,14 @@ interface NodeData {
 
 function GraphExplorer() {
   const { isAuthenticated, getAuthHeaders } = useAuth();
-  const [currentPath, setCurrentPath] = useState<string>(GUN_PATHS.SHOGUN);
+  const [currentPath, setCurrentPath] = useState<string>(ZEN_PATHS.SHOGUN);
   const [data, setData] = useState<NodeData | null>(null);
-  const [engine, setEngine] = useState<"gun" | "zen">("zen"); // Default to ZEN as per user request
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
   const [writing, setWriting] = useState(false);
+
 
   // New features
   const [newPeer, setNewPeer] = useState("");
@@ -29,8 +29,7 @@ function GraphExplorer() {
     setLoading(true);
     setError("");
     try {
-      const apiPath = engine === "zen" ? "zen/node" : "node";
-      const response = await fetch(`/api/v1/system/${apiPath}/${encodeURIComponent(path)}`, {
+      const response = await fetch(`/api/v1/system/zen/node/${encodeURIComponent(path)}`, {
         headers: getAuthHeaders(),
       });
 
@@ -56,14 +55,14 @@ function GraphExplorer() {
   };
 
   const handleJumpToRoot = () => {
-    setCurrentPath(GUN_PATHS.SHOGUN);
+    setCurrentPath(ZEN_PATHS.SHOGUN);
   };
 
   const handleBack = () => {
-    if (!currentPath || currentPath === GUN_PATHS.SHOGUN) return;
+    if (!currentPath || currentPath === ZEN_PATHS.SHOGUN) return;
     const parts = currentPath.split("/");
     parts.pop();
-    setCurrentPath(parts.join("/") || GUN_PATHS.SHOGUN);
+    setCurrentPath(parts.join("/") || ZEN_PATHS.SHOGUN);
   };
 
   const handleWrite = async (e: React.FormEvent) => {
@@ -78,8 +77,7 @@ function GraphExplorer() {
         },
       };
 
-      const apiPath = engine === "zen" ? "zen/node" : "node";
-      const response = await fetch(`/api/v1/system/${apiPath}/${encodeURIComponent(currentPath)}`, {
+      const response = await fetch(`/api/v1/system/zen/node/${encodeURIComponent(currentPath)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -171,27 +169,17 @@ function GraphExplorer() {
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="card-title text-2xl">🔍 Graph Explorer</h2>
-              <p className="text-base-content/70">Inspect GunDB nodes and properties</p>
+              <p className="text-base-content/70">Inspect ZenDB nodes and properties</p>
             </div>
-            <div className="flex gap-2">
-              <div className="join mr-4">
-                <button 
-                  className={`btn btn-sm join-item ${engine === 'gun' ? 'btn-success' : 'btn-outline opacity-50'}`}
-                  onClick={() => setEngine('gun')}
-                >
-                  Gun
-                </button>
-                <button 
-                  className={`btn btn-sm join-item ${engine === 'zen' ? 'btn-secondary' : 'btn-outline opacity-50'}`}
-                  onClick={() => setEngine('zen')}
-                >
-                  ZEN
-                </button>
+            <div className="flex gap-2 items-center">
+              <div className="badge badge-secondary gap-2 py-3 px-4 font-bold text-xs mr-2">
+                <span className="w-2 h-2 rounded-full bg-success animate-pulse"></span>
+                ZEN ACTIVE
               </div>
               <button
                 className="btn btn-neutral btn-sm"
                 onClick={handleBack}
-                disabled={currentPath === "shogun"}
+                disabled={currentPath === ZEN_PATHS.SHOGUN}
               >
                 ⬅ Back
               </button>
@@ -229,31 +217,31 @@ function GraphExplorer() {
             </span>
             <button
               className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(GUN_PATHS.SHOGUN)}
+              onClick={() => setCurrentPath(ZEN_PATHS.SHOGUN)}
             >
               Root
             </button>
             <button
               className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(GUN_PATHS.RELAYS)}
+              onClick={() => setCurrentPath(ZEN_PATHS.RELAYS)}
             >
               Relays
             </button>
             <button
               className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(GUN_PATHS.SHOGUN_WORMHOLE)}
+              onClick={() => setCurrentPath(ZEN_PATHS.SHOGUN_WORMHOLE)}
             >
               Wormhole
             </button>
             <button
               className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(GUN_PATHS.SHOGUN_INDEX)}
+              onClick={() => setCurrentPath(ZEN_PATHS.SHOGUN_INDEX)}
             >
               Index
             </button>
             <button
               className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(GUN_PATHS.ANNAS_ARCHIVE)}
+              onClick={() => setCurrentPath(ZEN_PATHS.ANNAS_ARCHIVE)}
             >
               Anna's Archive
             </button>
@@ -268,7 +256,7 @@ function GraphExplorer() {
             <input
               type="text"
               className="input input-bordered input-sm w-full max-w-xs"
-              placeholder="Add Gun Relay Peer (wss://...)"
+              placeholder="Add Zen Peer (wss://...)"
               value={newPeer}
               onChange={(e) => setNewPeer(e.target.value)}
             />
