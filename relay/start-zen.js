@@ -3,7 +3,7 @@ import { dirname, join } from "path";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const zenPath = join(dirname(require.resolve("zen")), "relay.js");
+const zenPath = join(dirname(require.resolve("zen")), "script", "server.js");
 const peers = process.env.GUN_PEERS || process.env.RELAY_PEERS || "";
 
 const env = { ...process.env, PEERS: peers };
