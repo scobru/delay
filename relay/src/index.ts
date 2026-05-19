@@ -190,40 +190,89 @@ async function initializeServer() {
     next();
   });
 
-  // Proxy status and peers endpoints directly to the standalone Zen service on port 8420
+  // Proxy WebSocket connections to the standalone Zen service on port 8420
   const zenProxy = createProxyMiddleware({
     target: "http://127.0.0.1:8420",
     changeOrigin: true,
     ws: true,
   });
 
-  app.use(
-    ["/status", "/status/"],
-    createProxyMiddleware({
-      target: "http://127.0.0.1:8420",
-      changeOrigin: true,
-    })
-  );
-
-  app.use(
-    "/.well-known/peers.json",
-    createProxyMiddleware({
-      target: "http://127.0.0.1:8420",
-      changeOrigin: true,
-    })
-  );
-
   app.use("/zen", zenProxy);
 
-  // Return the resolved peers list directly to keep compatibility
-  app.get("/peers", async (req, res) => {
+  // /status - served directly (Zen service does not expose this HTTP route)
+  app.get(["/status", "/status/"], (req, res) => {
+    const activeWires = app.get("activeWires") || 0;
+    const totalConnections = app.get("totalConnections") || 0;
+    const gunInstance = app.get("gunInstance");
+    const zenInstance = app.get("zenInstance");
+    const relayPub = app.get("relayUserPub") || null;
+    const relayKeyPair = app.get("relayKeyPair") as any;
+
+    // Collect connected peer URLs from the Zen/Gun instance
+    const peers: string[] = [];
     try {
-      const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
-      const data = await response.json();
-      res.status(200).json(data.peers || []);
-    } catch (e) {
-      res.status(200).json([]);
-    }
+      const opt = (zenInstance || gunInstance)?._?.opt;
+      if (opt?.peers) {
+        Object.entries(opt.peers as Record<string, any>).forEach(([url, p]: [string, any]) => {
+          if (p?.wire) peers.push(url);
+        });
+      }
+    } catch (_) {}
+
+    res.status(200).json({
+      status: "ok",
+      relay: relayConfig.name,
+      version: packageConfig.version || "1.0.0",
+      pub: relayPub,
+      epub: relayKeyPair?.epub || null,
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      connections: {
+        active: activeWires,
+        total: totalConnections,
+      },
+      peers,
+      services: {
+        gun: gunInstance ? "active" : "inactive",
+        zen: zenInstance ? "active" : "inactive",
+      },
+    });
+  });
+
+  // /.well-known/peers.json - served directly
+  app.get("/.well-known/peers.json", (req, res) => {
+    const zenInstance = app.get("zenInstance");
+    const gunInstance = app.get("gunInstance");
+
+    const peers: string[] = [];
+    try {
+      const opt = (zenInstance || gunInstance)?._?.opt;
+      if (opt?.peers) {
+        Object.entries(opt.peers as Record<string, any>).forEach(([url, p]: [string, any]) => {
+          if (p?.wire) peers.push(url);
+        });
+      }
+    } catch (_) {}
+
+    res.status(200).json({ peers });
+  });
+
+  // /peers - convenience endpoint returning peers array directly
+  app.get("/peers", (req, res) => {
+    const zenInstance = app.get("zenInstance");
+    const gunInstance = app.get("gunInstance");
+
+    const peers: string[] = [];
+    try {
+      const opt = (zenInstance || gunInstance)?._?.opt;
+      if (opt?.peers) {
+        Object.entries(opt.peers as Record<string, any>).forEach(([url, p]: [string, any]) => {
+          if (p?.wire) peers.push(url);
+        });
+      }
+    } catch (_) {}
+
+    res.status(200).json(peers);
   });
 
   // ===== SECURITY: CORS Configuration =====
