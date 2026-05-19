@@ -190,89 +190,80 @@ async function initializeServer() {
     next();
   });
 
-  // Proxy WebSocket connections to the standalone Zen service on port 8420
+  // Proxy status and peers endpoints directly to the standalone Zen service on port 8420
+  // Zen server.js exposes:
+  //   GET /status              → ZEN-signed string (text/plain) — client decodes with ZEN.recover()+ZEN.verify()
+  //   GET /.well-known/peers.json → { peers: ["host:port", ...] }
   const zenProxy = createProxyMiddleware({
     target: "http://127.0.0.1:8420",
     changeOrigin: true,
     ws: true,
+    // @ts-ignore
+    on: {
+      error: (err: any, req: any, res: any) => {
+        // If Zen service is not reachable, return empty fallback instead of crashing
+        loggers.server.warn({ err: err.message }, "⚠️ Zen service on :8420 not reachable");
+        if (res && !res.headersSent) {
+          const url: string = req.url || "";
+          if (url.includes("peers.json")) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ peers: [] }));
+          } else {
+            res.writeHead(503, { "Content-Type": "text/plain" });
+            res.end("");
+          }
+        }
+      },
+    },
   });
+
+  app.use(
+    ["/status", "/status/"],
+    createProxyMiddleware({
+      target: "http://127.0.0.1:8420",
+      changeOrigin: true,
+      // @ts-ignore
+      on: {
+        error: (err: any, req: any, res: any) => {
+          loggers.server.warn({ err: err.message }, "⚠️ Zen /status not reachable");
+          if (res && !res.headersSent) {
+            res.writeHead(503, { "Content-Type": "text/plain" });
+            res.end("");
+          }
+        },
+      },
+    })
+  );
+
+  app.use(
+    "/.well-known/peers.json",
+    createProxyMiddleware({
+      target: "http://127.0.0.1:8420",
+      changeOrigin: true,
+      // @ts-ignore
+      on: {
+        error: (err: any, req: any, res: any) => {
+          loggers.server.warn({ err: err.message }, "⚠️ Zen /.well-known/peers.json not reachable");
+          if (res && !res.headersSent) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ peers: [] }));
+          }
+        },
+      },
+    })
+  );
 
   app.use("/zen", zenProxy);
 
-  // /status - served directly (Zen service does not expose this HTTP route)
-  app.get(["/status", "/status/"], (req, res) => {
-    const activeWires = app.get("activeWires") || 0;
-    const totalConnections = app.get("totalConnections") || 0;
-    const gunInstance = app.get("gunInstance");
-    const zenInstance = app.get("zenInstance");
-    const relayPub = app.get("relayUserPub") || null;
-    const relayKeyPair = app.get("relayKeyPair") as any;
-
-    // Collect connected peer URLs from the Zen/Gun instance
-    const peers: string[] = [];
+  // Return the resolved peers list directly to keep compatibility
+  app.get("/peers", async (req, res) => {
     try {
-      const opt = (zenInstance || gunInstance)?._?.opt;
-      if (opt?.peers) {
-        Object.entries(opt.peers as Record<string, any>).forEach(([url, p]: [string, any]) => {
-          if (p?.wire) peers.push(url);
-        });
-      }
-    } catch (_) {}
-
-    res.status(200).json({
-      status: "ok",
-      relay: relayConfig.name,
-      version: packageConfig.version || "1.0.0",
-      pub: relayPub,
-      epub: relayKeyPair?.epub || null,
-      uptime: Math.floor(process.uptime()),
-      timestamp: new Date().toISOString(),
-      connections: {
-        active: activeWires,
-        total: totalConnections,
-      },
-      peers,
-      services: {
-        gun: gunInstance ? "active" : "inactive",
-        zen: zenInstance ? "active" : "inactive",
-      },
-    });
-  });
-
-  // /.well-known/peers.json - served directly
-  app.get("/.well-known/peers.json", (req, res) => {
-    const zenInstance = app.get("zenInstance");
-    const gunInstance = app.get("gunInstance");
-
-    const peers: string[] = [];
-    try {
-      const opt = (zenInstance || gunInstance)?._?.opt;
-      if (opt?.peers) {
-        Object.entries(opt.peers as Record<string, any>).forEach(([url, p]: [string, any]) => {
-          if (p?.wire) peers.push(url);
-        });
-      }
-    } catch (_) {}
-
-    res.status(200).json({ peers });
-  });
-
-  // /peers - convenience endpoint returning peers array directly
-  app.get("/peers", (req, res) => {
-    const zenInstance = app.get("zenInstance");
-    const gunInstance = app.get("gunInstance");
-
-    const peers: string[] = [];
-    try {
-      const opt = (zenInstance || gunInstance)?._?.opt;
-      if (opt?.peers) {
-        Object.entries(opt.peers as Record<string, any>).forEach(([url, p]: [string, any]) => {
-          if (p?.wire) peers.push(url);
-        });
-      }
-    } catch (_) {}
-
-    res.status(200).json(peers);
+      const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
+      const data = await response.json();
+      res.status(200).json(data.peers || []);
+    } catch (e) {
+      res.status(200).json([]);
+    }
   });
 
   // ===== SECURITY: CORS Configuration =====
