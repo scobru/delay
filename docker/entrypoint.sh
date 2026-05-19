@@ -60,6 +60,12 @@ mkdir -p "$KEYS_DIR"
 chown -R node:node "$KEYS_DIR" || true
 chmod 755 "$KEYS_DIR" || true
 
+# Ensure node user's home directory exists and has correct permissions
+echo "🔐 Setting permissions for node user home directory at /home/node..."
+mkdir -p /home/node
+chown -R node:node /home/node || true
+chmod 755 /home/node || true
+
 # Auto-generate SEA keypair if not configured and keypair file doesn't exist
 KEYPAIR_FILE="${RELAY_SEA_KEYPAIR_PATH:-/app/keys/relay-keypair.json}"
 
