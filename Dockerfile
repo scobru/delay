@@ -235,6 +235,11 @@ RUN rm -f package-lock.json && rm -rf node_modules && \
 # Force include dev dependencies even if NODE_ENV=production is set
 RUN NODE_ENV=development npm install --include=dev
 
+# Restore the missing script/ folder of the zen package since it is excluded from NPM packages by zen's files list
+RUN git clone https://github.com/akaoio/zen.git /tmp/zen && \
+    cp -r /tmp/zen/script node_modules/zen/ && \
+    rm -rf /tmp/zen
+
 # Build shogun-contracts SDK if needed (for local installations)
 # This ensures the SDK is compiled even if shogun-contracts is installed locally
 RUN if [ -d "node_modules/shogun-contracts/sdk" ] && [ ! -f "node_modules/shogun-contracts/sdk/dist/index.js" ]; then \
