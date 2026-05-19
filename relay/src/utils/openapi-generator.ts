@@ -13,7 +13,7 @@ interface OpenAPISpec {
   paths: Record<string, any>;
 }
 
-export function generateOpenAPISpec(baseUrl: string = "http://localhost:8765"): OpenAPISpec {
+export function generateOpenAPISpec(baseUrl: string = "http://localhost:8421"): OpenAPISpec {
   return {
     openapi: "3.0.0",
     info: {

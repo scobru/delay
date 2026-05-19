@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import cors from "cors";
 import dotenv from "dotenv";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import setSelfAdjustingInterval from "self-adjusting-interval";
 import { fileURLToPath } from "url";
 // @ts-ignore
@@ -37,21 +38,7 @@ import { GUN_PATHS, getGunNode } from "./utils/gun-paths";
 
 import { gunAliasGuard } from "./middleware/gun-alias-guard";
 import { performAliasMaintenance } from "./utils/alias-maintenance";
-import {
-  discoverNetworkIdentity,
-  getHardwarePeerId,
-  setupPeerExchange,
-  latchDomain,
-  kprs,
-  activeDomain,
-  activePort,
-  networkIdentity as zenNetworkIdentity,
-  setNetworkIdentityRefreshedCallback,
-  startNetworkIdentityRefresh,
-  startBootPeerWatchdog
-} from "./utils/zen-network";
-// @ts-ignore
-import { buildStatus, signStatus } from "zen/lib/status.js";
+import { latchDomain } from "./utils/zen-network";
 
 // Route Imports
 
@@ -119,28 +106,6 @@ let path_public = serverConfig.publicPath;
  */
 async function initializeServer() {
   let relayKeyPair: any = null;
-  let cachedStatus: string | null = null;
-
-  async function refreshStatus() {
-    if (!relayKeyPair) return;
-    try {
-      const payload = buildStatus({
-        pub: relayKeyPair.pub,
-        domain: activeDomain || (zenNetworkIdentity ? zenNetworkIdentity.domain : null) || null,
-        ip4: zenNetworkIdentity ? (zenNetworkIdentity.ip || null) : null,
-        ip6: zenNetworkIdentity ? (zenNetworkIdentity.ip6 || null) : null,
-        port: port as number,
-        peers: Array.from(kprs)
-          .filter(u => u.endsWith("/zen")),
-        mcp: false,
-      });
-      cachedStatus = await signStatus(payload, relayKeyPair);
-      loggers.server.info("🔑 ZEN signed /status payload refreshed");
-    } catch (e: any) {
-      loggers.server.error(`⚠️ Failed to generate signed status: ${e.message}`);
-    }
-  }
-
   // Welcome message with ASCII art logo
   const welcomeMessage = serverConfig.welcomeMessage;
   console.log(welcomeMessage);
@@ -225,35 +190,40 @@ async function initializeServer() {
     next();
   });
 
-  // --- ZEN Peers Endpoint ---
-  app.get("/peers", (req, res) => {
-    res.status(200).json(Array.from(kprs));
+  // Proxy status and peers endpoints directly to the standalone Zen service on port 8420
+  const zenProxy = createProxyMiddleware({
+    target: "http://127.0.0.1:8420",
+    changeOrigin: true,
+    ws: true,
   });
 
-  // --- ZEN Cryptographic Status Endpoint ---
-  app.get(["/status", "/status/"], (req, res) => {
-    res.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-    });
-    res.end(cachedStatus || "");
-  });
+  app.use(
+    ["/status", "/status/"],
+    createProxyMiddleware({
+      target: "http://127.0.0.1:8420",
+      changeOrigin: true,
+    })
+  );
 
-  // --- ZEN Well-Known Peers Endpoint ---
-  app.get("/.well-known/peers.json", (req, res) => {
-    const formattedPeers = Array.from(kprs)
-      .map(url => {
-        try {
-          const parsed = new URL(url);
-          return parsed.host;
-        } catch {
-          return url.replace(/^wss?:\/\//, "").split("/")[0];
-        }
-      })
-      .filter((value, index, self) => self.indexOf(value) === index);
+  app.use(
+    "/.well-known/peers.json",
+    createProxyMiddleware({
+      target: "http://127.0.0.1:8420",
+      changeOrigin: true,
+    })
+  );
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(200).json({ peers: formattedPeers });
+  app.use("/zen", zenProxy);
+
+  // Return the resolved peers list directly to keep compatibility
+  app.get("/peers", async (req, res) => {
+    try {
+      const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
+      const data = await response.json();
+      res.status(200).json(data.peers || []);
+    } catch (e) {
+      res.status(200).json([]);
+    }
   });
 
   // ===== SECURITY: CORS Configuration =====
@@ -482,7 +452,13 @@ async function initializeServer() {
   // Avvia il server
   const server = await startServer();
 
-  // Initialize Holster Relay with built-in WebSocket server and connection management
+  // Handle WebSocket upgrade proxying to standalone Zen service
+  server.on("upgrade", (req, socket, head) => {
+    if (req.url?.startsWith("/zen")) {
+      // @ts-ignore
+      zenProxy.upgrade(req, socket, head);
+    }
+  });
 
   const peers = relayConfig.peers;
   loggers.server.info({ peers }, "🔍 Peers");
@@ -492,109 +468,35 @@ async function initializeServer() {
   const dataDir = storageConfig.dataDir;
   loggers.server.info({ dataDir }, "📁 Data directory");
 
-  // Choose storage type from environment variable
-  // Options: "sqlite" (default), "radisk", or "s3"
-  const storageType = storageConfig.storageType;
-  let store: any = null;
+  // Storage is handled out-of-process by the standalone Zen service on 8420.
+  // We act as a client connecting to it.
+  const store = null;
 
-  if (storageType === "sqlite") {
-    // Keep gun.db filename for full SQLite database backwards compatibility (no lost nodes/users)
-    const dbPath = path.join(dataDir, "gun.db");
-    store = new SQLiteStore({
-      dbPath: dbPath,
-      file: "radata",
-    });
-    loggers.server.info("📁 Using SQLite storage for ZEN");
-  } else if (storageType === "s3") {
-    const s3Conf = storageConfig.s3;
-    if (!s3Conf?.endpoint || !s3Conf?.accessKeyId || !s3Conf?.secretAccessKey) {
-      loggers.server.warn(
-        "⚠️ S3 storage configured but credentials missing. Falling back to radisk."
-      );
-    } else {
-      store = new S3Store({
-        endpoint: s3Conf.endpoint,
-        accessKeyId: s3Conf.accessKeyId,
-        secretAccessKey: s3Conf.secretAccessKey,
-        bucket: s3Conf.bucket,
-        region: s3Conf.region,
-      });
-      loggers.server.info(
-        {
-          endpoint: s3Conf.endpoint,
-          bucket: s3Conf.bucket,
-        },
-        "🪣 Using S3/MinIO storage for ZEN"
-      );
-    }
-  }
-
-  // Configure ZEN options based on storage selection
+  // Configure ZEN options as a lightweight client
   const zenOptions: any = {
-    super: true,
-    web: server,
-    ws: { path: zenConfig.path || "/zen" }, // Nest path for zen wire
-    radisk: true,
-    isValid: hasValidToken,
+    super: false, // Act as client
     localStorage: false,
-    axe: true,
-    peers: peers, // Share the same peers
-    store: store,
-    stats: false, // Prevent writing to /root/.local/state/zen/
+    radisk: false, // Standalone service handles database persistence!
+    axe: false,    // Standalone service handles AXE!
+    peers: peers, // Connect to local Zen relay (e.g. http://localhost:8420/zen)
   };
 
-  if (!store) {
-    zenOptions.file = dataDir;
-  }
-
-  loggers.server.info({ path: zenConfig.path || "/zen", dataDir }, "🚀 Initializing ZEN Instance...");
-
-  // Discover network identity and Hardware ID
-  const networkIdentity = await discoverNetworkIdentity(port as number);
-  loggers.server.info(`🌐 Network Identity Discovered: ${JSON.stringify(networkIdentity)}`);
-
-  const hwidRaw = getHardwarePeerId();
-  let ppid = null;
-  if (hwidRaw) {
-    try {
-      const seed = await ZEN.hash(hwidRaw, null, null, { encode: "base62" });
-      const ppair = await ZEN.pair(null, { seed });
-      ppid = ppair.pub;
-      loggers.server.info(`🔑 ZEN Peer ID (stable): ${ppid.slice(0, 9)}...`);
-    } catch (e: any) {
-      loggers.server.warn(`⚠️ ZEN pid derivation failed: ${e.message}`);
-    }
-  }
-
-  if (ppid) {
-    zenOptions.pid = ppid;
-  }
+  loggers.server.info({ peers }, "🚀 Initializing ZEN Client Instance...");
 
   const zen = new ZEN(zenOptions);
-  zen._graph; // Force relay initialization as per examples
 
   // Initialize Gun Alias Guard (running over Zen instance natively)
   gunAliasGuard(zen);
 
-  // Store Zen instance in express app for access from routes (using both mappings for compatibility)
+  // Store Zen instance in express app for access from routes
   app.set("zenInstance", zen);
   app.set("gunInstance", zen); 
-  app.set("gunStore", store);
+  app.set("gunStore", null);
 
   (global as any).zenInstance = zen;
   (global as any).gunInstance = zen;
 
-  const activeDomain = networkIdentity.domain || networkIdentity.ip;
-  const serverUrl = activeDomain ? `wss://${activeDomain}:${port}${zenConfig.path || "/zen"}` : null;
-  setupPeerExchange(zen, serverUrl);
-
-  // Hook, compile, and start ZEN status compliance systems
-  setNetworkIdentityRefreshedCallback(refreshStatus);
-  await refreshStatus();
-  startNetworkIdentityRefresh(port as number);
-  startBootPeerWatchdog(zen, relayConfig.peers);
-
-  loggers.server.info("✅ ZEN Instance successfully initialized");
+  loggers.server.info("✅ ZEN Client Instance successfully initialized");
 
   // Initialize connection counters
   let totalConnections = 0;
@@ -922,9 +824,9 @@ async function initializeServer() {
 
     // Close storage store if it exists (SQLite or S3)
     // The store will gracefully handle any remaining GunDB operations
-    if (store) {
+    if (store as any) {
       try {
-        store.close();
+        (store as any).close();
         loggers.server.info("✅ Storage store closed");
       } catch (err: any) {
         loggers.server.error({ err }, "Error closing storage store");

@@ -23,9 +23,9 @@ export const config = {
   server: {
     host: process.env.RELAY_HOST || ip.address(),
     port: (() => {
-      const port = parseInt(process.env.RELAY_PORT || process.env.PORT || "8765");
+      const port = parseInt(process.env.RELAY_PORT || process.env.PORT || "8421");
       if (isNaN(port) || port <= 0 || port >= 65536) {
-        return 8765;
+        return 8421;
       }
       return port;
     })(),
@@ -55,7 +55,7 @@ export const config = {
       }
       // Default public Gun peers
       return [
-        "http://localhost:8765/zen"
+        "http://localhost:8420/zen"
       ];
     })(),
   },
