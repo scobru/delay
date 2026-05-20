@@ -526,7 +526,7 @@ async function initializeServer() {
     localStorage: false,
     radisk: false, // Standalone service handles database persistence!
     axe: false,    // Standalone service handles AXE!
-    peers: peers, // Connect to local Zen relay (e.g. http://localhost:8420/zen)
+    peers: ["http://127.0.0.1:8420/zen"], // Connect to local Zen relay (e.g. http://localhost:8420/zen)
   };
 
   loggers.server.info({ peers }, "🚀 Initializing ZEN Client Instance...");
