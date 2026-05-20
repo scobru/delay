@@ -1,4 +1,5 @@
 import { loggers } from "./logger";
+import dns from "dns/promises";
 
 // @ts-ignore
 import { disc, hwid } from "zen/lib/discover.js";
@@ -15,6 +16,41 @@ const SIV = 10 * 60 * 1000; // 10 min base interval
 const MSIV = 2 * 60 * 60 * 1000; // 2 hr cap
 const MUPS = 10; // max outbound peer connections from scan
 let siv = SIV;
+let selfIp: string | null = null;
+
+/**
+ * Resolve the IP of our own domain once and cache it.
+ */
+async function resolveSelfIp(): Promise<string | null> {
+  if (selfIp) return selfIp;
+  if (!activeDomain) return null;
+  try {
+    const addrs = await dns.resolve4(activeDomain);
+    selfIp = addrs[0] || null;
+    loggers.server.debug(`Self IP resolved: ${activeDomain} → ${selfIp}`);
+  } catch {
+    selfIp = null;
+  }
+  return selfIp;
+}
+
+/**
+ * Check if a candidate peer URL resolves to the same IP as ourselves
+ * (wildcard DNS ghost detection).
+ */
+async function isSelfPeer(url: string): Promise<boolean> {
+  try {
+    const hostname = new URL(url).hostname;
+    // If the hostname is literally our domain, that's fine (it's us as a real peer)
+    if (hostname === activeDomain) return true;
+    const ownIp = await resolveSelfIp();
+    if (!ownIp) return false;
+    const addrs = await dns.resolve4(hostname);
+    return addrs.includes(ownIp);
+  } catch {
+    return false;
+  }
+}
 
 export let activeDomain: string | null = null;
 export let activePort: number = 8420;
@@ -72,7 +108,7 @@ function scnd(host: string, zenInstance: any) {
   loggers.server.info(`🔍 Scanning ZEN pattern: ${key}`);
   scanbg(host, {
     port: activePort,
-    onFound: (url: string) => addPeer(url, zenInstance),
+    onFound: (url: string) => { addPeer(url, zenInstance); },
   });
 }
 
@@ -104,37 +140,47 @@ function scheduleNetworkScan(zenInstance: any) {
 
 function addPeer(url: string, zenInstance: any) {
   if (kprs.has(url)) return;
-  kprs.add(url);
-  fic = true;
-  loggers.server.info(`🤝 Discovered new ZEN peer: ${url}`);
 
-  const r = zenInstance && zenInstance._graph && zenInstance._graph._;
-  const ups = r && r.axe ? Object.keys(r.axe.up || {}).length : 0;
+  // Async self-check: filter out wildcard DNS ghosts
+  isSelfPeer(url).then((isSelf) => {
+    if (isSelf) {
+      loggers.server.debug(`🚫 Skipping self-peer (wildcard DNS): ${url}`);
+      return;
+    }
 
-  if (pmsh && ups < MUPS) {
+    if (kprs.has(url)) return; // re-check after async gap
+    kprs.add(url);
+    fic = true;
+    loggers.server.info(`🤝 Discovered new ZEN peer: ${url}`);
+
+    const r = zenInstance && zenInstance._graph && zenInstance._graph._;
+    const ups = r && r.axe ? Object.keys(r.axe.up || {}).length : 0;
+
+    if (pmsh && ups < MUPS) {
+      try {
+        pmsh.hi({ id: url, url, retry: 9 });
+      } catch {}
+    } else if (!pmsh && r && r.opt) {
+      if (!Array.isArray(r.opt.peers)) r.opt.peers = [];
+      if (!r.opt.peers.includes(url)) r.opt.peers.push(url);
+    }
+
+    if (pmsh) {
+      try {
+        pmsh.say({ dam: "pex", peers: [url] }, r && r.opt && r.opt.peers);
+      } catch {}
+    }
+
     try {
-      pmsh.hi({ id: url, url, retry: 9 });
+      scnd(new URL(url).hostname, zenInstance);
     } catch {}
-  } else if (!pmsh && r && r.opt) {
-    if (!Array.isArray(r.opt.peers)) r.opt.peers = [];
-    if (!r.opt.peers.includes(url)) r.opt.peers.push(url);
-  }
 
-  if (pmsh) {
-    try {
-      pmsh.say({ dam: "pex", peers: [url] }, r && r.opt && r.opt.peers);
-    } catch {}
-  }
-
-  try {
-    scnd(new URL(url).hostname, zenInstance);
-  } catch {}
-  
-  if (onNetworkIdentityRefreshed) {
-    try {
-      onNetworkIdentityRefreshed();
-    } catch {}
-  }
+    if (onNetworkIdentityRefreshed) {
+      try {
+        onNetworkIdentityRefreshed();
+      } catch {}
+    }
+  }).catch(() => {});
 }
 
 export function setupPeerExchange(zenInstance: any, serverUrl: string | null) {

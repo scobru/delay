@@ -529,7 +529,7 @@ async function initializeServer() {
     peers: ["http://127.0.0.1:8420/zen"], // Connect to local Zen relay (e.g. http://localhost:8420/zen)
   };
 
-  loggers.server.info({ peers }, "🚀 Initializing ZEN Client Instance...");
+  loggers.server.info({ peers: zenOptions.peers }, "🚀 Initializing ZEN Client Instance...");
 
   const zen = new ZEN(zenOptions);
 
