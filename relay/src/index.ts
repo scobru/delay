@@ -193,16 +193,16 @@ async function initializeServer() {
   // ===== SECURITY: CORS Configuration =====
   const corsOptions = {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
 
-        if (isOriginAllowed(origin, authConfig.corsOrigins)) {
-          callback(null, true);
-        } else {
-          loggers.server.warn({ origin }, "CORS blocked request from origin");
-          callback(new Error("Not allowed by CORS"));
-        }
-      },
+      if (isOriginAllowed(origin, authConfig.corsOrigins)) {
+        callback(null, true);
+      } else {
+        loggers.server.warn({ origin }, "CORS blocked request from origin");
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: authConfig.corsCredentials,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -524,8 +524,8 @@ async function initializeServer() {
   const zenOptions: any = {
     super: false, // Act as client
     localStorage: false,
-    radisk: false, // Standalone service handles database persistence!
-    axe: false,    // Standalone service handles AXE!
+    radisk: true, // Standalone service handles database persistence!
+    axe: true,    // Standalone service handles AXE!
     peers: ["http://127.0.0.1:8420/zen"], // Connect to local Zen relay (e.g. http://localhost:8420/zen)
   };
 
@@ -538,7 +538,7 @@ async function initializeServer() {
 
   // Store Zen instance in express app for access from routes
   app.set("zenInstance", zen);
-  app.set("gunInstance", zen); 
+  app.set("gunInstance", zen);
   app.set("gunStore", null);
 
   (global as any).zenInstance = zen;
