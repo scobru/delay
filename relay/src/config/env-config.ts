@@ -27,6 +27,10 @@ export const config = {
       if (isNaN(port) || port <= 0 || port >= 65536) {
         return 8421;
       }
+      if (port === 8420) {
+        console.warn("⚠️  Port 8420 is reserved for internal ZEN service. Falling back to 8421.");
+        return 8421;
+      }
       return port;
     })(),
     publicPath: process.env.RELAY_PATH || "public",
