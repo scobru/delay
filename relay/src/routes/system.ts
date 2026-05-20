@@ -113,6 +113,19 @@ router.get("/relay-info", (req, res) => {
   });
 });
 
+// Zen status endpoint (Public, signed raw signature)
+router.get("/zen-status", async (req, res) => {
+  try {
+    const response = await fetch("http://127.0.0.1:8420/status");
+    const data = await response.text();
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(data);
+  } catch (error: any) {
+    loggers.server.warn({ err: error.message }, "⚠️ Zen /status not reachable via system API");
+    res.status(503).send("");
+  }
+});
+
 // All data endpoint (requires authentication)
 router.get("/alldata", adminAuthMiddleware, (req, res) => {
   try {

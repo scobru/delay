@@ -20,14 +20,16 @@ function Status() {
   const { isAuthenticated, getAuthHeaders } = useAuth();
   const [health, setHealth] = useState<HealthData | null>(null);
   const [stats, setStats] = useState<StatsData | null>(null);
+  const [zenApiOnline, setZenApiOnline] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [healthRes, statsRes] = await Promise.all([
+        const [healthRes, statsRes, zenRes] = await Promise.all([
           fetch("/api/v1/health", { headers: getAuthHeaders() }),
           fetch("/api/v1/system/stats.json", { headers: getAuthHeaders() }),
+          fetch("/status").catch(() => null),
         ]);
 
         const healthData = await healthRes.json();
@@ -35,8 +37,15 @@ function Status() {
 
         setHealth(healthData.data || healthData);
         setStats(statsData);
+        
+        if (zenRes && zenRes.status === 200) {
+          setZenApiOnline(true);
+        } else {
+          setZenApiOnline(false);
+        }
       } catch (error) {
         console.error("Failed to fetch status:", error);
+        setZenApiOnline(false);
       } finally {
         setLoading(false);
       }
@@ -216,7 +225,7 @@ function Status() {
              <ul className="space-y-4">
                 <li className="flex items-center justify-between">
                    <span className="text-sm">ZEN Relay</span>
-                   <span className="status-dot online"></span>
+                   <span className={`status-dot ${zenApiOnline ? "online" : "offline"}`}></span>
                 </li>
                 <li className="flex items-center justify-between">
                    <span className="text-sm">IPFS Node</span>
@@ -224,7 +233,7 @@ function Status() {
                 </li>
                 <li className="flex items-center justify-between">
                    <span className="text-sm">ZEN API</span>
-                   <span className="status-dot warning"></span>
+                   <span className={`status-dot ${zenApiOnline ? "online" : "offline"}`}></span>
                 </li>
              </ul>
           </div>

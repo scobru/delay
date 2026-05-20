@@ -190,82 +190,6 @@ async function initializeServer() {
     next();
   });
 
-  // Proxy status and peers endpoints directly to the standalone Zen service on port 8420
-  // Zen server.js exposes:
-  //   GET /status              → ZEN-signed string (text/plain) — client decodes with ZEN.recover()+ZEN.verify()
-  //   GET /.well-known/peers.json → { peers: ["host:port", ...] }
-  const zenProxy = createProxyMiddleware({
-    target: "http://127.0.0.1:8420",
-    changeOrigin: true,
-    ws: true,
-    // @ts-ignore
-    on: {
-      error: (err: any, req: any, res: any) => {
-        // If Zen service is not reachable, return empty fallback instead of crashing
-        loggers.server.warn({ err: err.message }, "⚠️ Zen service on :8420 not reachable");
-        if (res && !res.headersSent) {
-          const url: string = req.url || "";
-          if (url.includes("peers.json")) {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ peers: [] }));
-          } else {
-            res.writeHead(503, { "Content-Type": "text/plain" });
-            res.end("");
-          }
-        }
-      },
-    },
-  });
-
-  app.use(
-    ["/status", "/status/"],
-    createProxyMiddleware({
-      target: "http://127.0.0.1:8420",
-      changeOrigin: true,
-      // @ts-ignore
-      on: {
-        error: (err: any, req: any, res: any) => {
-          loggers.server.warn({ err: err.message }, "⚠️ Zen /status not reachable");
-          if (res && !res.headersSent) {
-            res.writeHead(503, { "Content-Type": "text/plain" });
-            res.end("");
-          }
-        },
-      },
-    })
-  );
-
-  app.use(
-    "/.well-known/peers.json",
-    createProxyMiddleware({
-      target: "http://127.0.0.1:8420",
-      changeOrigin: true,
-      // @ts-ignore
-      on: {
-        error: (err: any, req: any, res: any) => {
-          loggers.server.warn({ err: err.message }, "⚠️ Zen /.well-known/peers.json not reachable");
-          if (res && !res.headersSent) {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ peers: [] }));
-          }
-        },
-      },
-    })
-  );
-
-  app.use("/zen", zenProxy);
-
-  // Return the resolved peers list directly to keep compatibility
-  app.get("/peers", async (req, res) => {
-    try {
-      const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
-      const data = await response.json();
-      res.status(200).json(data.peers || []);
-    } catch (e) {
-      res.status(200).json([]);
-    }
-  });
-
   // ===== SECURITY: CORS Configuration =====
   const corsOptions = {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
@@ -300,6 +224,90 @@ async function initializeServer() {
     },
     "🔒 CORS configured"
   );
+
+  // ===== SECURITY: Security Headers =====
+  app.use((req, res, next) => {
+    // Prevent clickjacking
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    // Prevent MIME type sniffing
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    // XSS Protection
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    // Referrer Policy
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
+
+  // --- Zen HTTP Direct Routes (replaces legacy root-level http-proxy-middleware context filtering) ---
+  app.get(["/status", "/zen/status"], async (req, res) => {
+    try {
+      const response = await fetch("http://127.0.0.1:8420/status");
+      const data = await response.text();
+      res.writeHead(200, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(data);
+    } catch (e: any) {
+      loggers.server.warn({ err: e.message }, "⚠️ Zen /status not reachable");
+      res.writeHead(503, { "Content-Type": "text/plain" });
+      res.end("");
+    }
+  });
+
+  app.get("/.well-known/peers.json", async (req, res) => {
+    try {
+      const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
+      const data = await response.json();
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "max-age=60",
+      });
+      res.end(JSON.stringify(data));
+    } catch (e: any) {
+      loggers.server.warn({ err: e.message }, "⚠️ Zen /.well-known/peers.json not reachable");
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ peers: [] }));
+    }
+  });
+
+  // Return the resolved peers list directly to keep compatibility
+  app.get("/peers", async (req, res) => {
+    try {
+      const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
+      const data = await response.json();
+      res.status(200).json(data.peers || []);
+    } catch (e) {
+      res.status(200).json([]);
+    }
+  });
+
+  // Proxy websocket/HTTP requests on /zen to http://127.0.0.1:8420/zen
+  const zenProxy = createProxyMiddleware({
+    target: "http://127.0.0.1:8420",
+    changeOrigin: true,
+    ws: true,
+    // @ts-ignore
+    on: {
+      error: (err: any, req: any, res: any) => {
+        // If Zen service is not reachable, return empty fallback instead of crashing
+        loggers.server.warn({ err: err.message }, "⚠️ Zen service on :8420 not reachable");
+        if (res && !res.headersSent) {
+          const url: string = req.url || "";
+          if (url.includes("peers.json")) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ peers: [] }));
+          } else {
+            res.writeHead(503, { "Content-Type": "text/plain" });
+            res.end("");
+          }
+        }
+      },
+    },
+  });
+
+  app.use("/zen", zenProxy);
 
   // ===== SECURITY: Security Headers =====
   app.use((req, res, next) => {
