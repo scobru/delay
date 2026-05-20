@@ -1,0 +1,12 @@
+[Unit]
+Description=ZEN auto-update timer — check for updates every hour
+Documentation=https://github.com/akaoio/zen
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+Unit=__ZEN_SERVICE__-update.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

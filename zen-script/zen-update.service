@@ -1,0 +1,13 @@
+[Unit]
+Description=ZEN auto-update — pull latest main and restart if changed
+Documentation=https://github.com/akaoio/zen
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__ZEN_USER__
+ExecStart=__ZEN_DIR__/script/update.sh --dir __ZEN_DIR__ --service __ZEN_SERVICE__
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zen-update

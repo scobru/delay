@@ -53,5 +53,3 @@ dist-ssr
 
 *.lock
 
-# zen script folder (generated copy for Docker build - do not commit)
-/zen-script/
