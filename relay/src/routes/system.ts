@@ -67,8 +67,6 @@ async function readLastLines(filePath: string, numLines: number): Promise<string
   }
 }
 
-import { performAliasMaintenance } from "../utils/alias-maintenance";
-
 const router: Router = express.Router();
 
 // Middleware per ottenere l'istanza Gun/ZEN dal relay
@@ -814,25 +812,6 @@ router.get("/services/:name/logs", adminAuthMiddleware, async (req, res) => {
 // RPC Execute endpoint
 router.post("/rpc/execute", adminAuthMiddleware, async (req, res) => {
   // ... existing code ...
-});
-
-// Alias maintenance endpoint
-router.post("/maintenance/aliases", adminAuthMiddleware, async (req, res) => {
-  try {
-    const gun = getGunInstance(req);
-    const stats = await performAliasMaintenance(gun);
-    res.json({
-      success: true,
-      stats,
-      timestamp: Date.now(),
-    });
-  } catch (error: any) {
-    loggers.server.error({ err: error }, "❌ Alias Maintenance error");
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
 });
 
 export default router;

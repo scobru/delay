@@ -37,7 +37,6 @@ import { secureCompare, hashToken, createProductionErrorHandler, isOriginAllowed
 import { GUN_PATHS, getGunNode } from "./utils/gun-paths";
 
 import { gunAliasGuard } from "./middleware/gun-alias-guard";
-import { performAliasMaintenance } from "./utils/alias-maintenance";
 import { latchDomain } from "./utils/zen-network";
 
 // Route Imports
@@ -862,29 +861,6 @@ async function initializeServer() {
     addTimeSeriesPoint("memory.heapUsed", process.memoryUsage().heapUsed);
 
   }, 300000); // 5 minutes
-
-  // --- AUTOMATIC ALIAS MAINTENANCE ---
-  // Run every 6 hours to ensure identity uniqueness and clean up duplicates
-  const ALIAS_MAINTENANCE_INTERVAL = 6 * 60 * 60 * 1000;
-  setInterval(async () => {
-    loggers.server.info("🧹 Starting scheduled Alias Maintenance...");
-    try {
-      const stats = await performAliasMaintenance(zen);
-      loggers.server.info(stats, "✅ Scheduled Alias Maintenance completed");
-    } catch (err: any) {
-      loggers.server.error({ err: err.message }, "❌ Scheduled Alias Maintenance failed");
-    }
-  }, ALIAS_MAINTENANCE_INTERVAL);
-
-  // Also run once on startup after 1 minute to clean legacy data
-  setTimeout(async () => {
-    loggers.server.info("🧹 Starting startup Alias Maintenance...");
-    try {
-      await performAliasMaintenance(zen);
-    } catch (err: any) {
-      loggers.server.error({ err: err.message }, "❌ Startup Alias Maintenance failed");
-    }
-  }, 60000);
 
   // Shutdown function
   async function shutdown() {
