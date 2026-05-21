@@ -148,6 +148,72 @@ export class StatsTracker {
     });
   }
 
+  public patchRawSocket(socket: any, addr: string, engine?: "gun" | "zen") {
+    if (!socket) return;
+    
+    // Check if already patched
+    if (socket.__patchedStatsRaw) return;
+    socket.__patchedStatsRaw = true;
+
+    const resolvedEngine: "gun" | "zen" = engine || (addr.includes('/zen') ? 'zen' : 'gun');
+
+    const id = addr + "_" + Date.now();
+    const peer: PeerStats = { id, addr, engine: resolvedEngine, connectedAt: Date.now(), msgCount: 0, bytesSent: 0, uptime: 0 };
+    this.peers.set(id, peer);
+    
+    if (resolvedEngine === "zen") this.zenPeers++;
+    else this.gunPeers++;
+
+    if (this.peers.size > this.peakPeers) {
+      this.peakPeers = this.peers.size;
+    }
+
+    loggers.server.info(`[+] Raw Proxy Peer connected: ${addr} (Total: ${this.peers.size})`);
+
+    const origWrite = typeof socket.write === "function" ? socket.write.bind(socket) : null;
+    if (origWrite) {
+      socket.write = (data: any, ...args: any[]) => {
+        const bytes = typeof data === "string" ? Buffer.byteLength(data) : data?.length || 0;
+        peer.bytesSent += bytes;
+        this.totalBytes += bytes;
+        this.tickBytes += bytes;
+        if (resolvedEngine === "zen") this.zenTickBytes += bytes;
+        else this.gunTickBytes += bytes;
+        return origWrite(data, ...args);
+      };
+    }
+
+    const onData = (chunk: Buffer) => {
+      const bytes = chunk.length || 0;
+      // Approximate messages: assuming 1 chunk = 1 message
+      peer.msgCount += 1;
+      this.totalMessages += 1;
+      this.tickMsgs += 1;
+      this.totalBytes += bytes;
+      this.tickBytes += bytes;
+      if (resolvedEngine === "zen") {
+        this.zenTickMsgs += 1;
+        this.zenTickBytes += bytes;
+      } else {
+        this.gunTickMsgs += 1;
+        this.gunTickBytes += bytes;
+      }
+    };
+
+    socket.on("data", onData);
+    
+    socket.on("close", () => {
+      this.peers.delete(id);
+      if (resolvedEngine === "zen") this.zenPeers--;
+      else this.gunPeers--;
+      loggers.server.info(`[-] Raw Proxy Peer disconnected: ${addr} (Total: ${this.peers.size}, Gun: ${this.gunPeers}, Zen: ${this.zenPeers})`);
+    });
+
+    socket.on("error", () => {
+      this.errorCount++;
+    });
+  }
+
   public getStats() {
     const now = Date.now();
     const uptimeMs = now - this.startTime;

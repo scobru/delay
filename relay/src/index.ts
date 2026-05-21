@@ -501,8 +501,12 @@ async function initializeServer() {
   const server = await startServer();
 
   // Handle WebSocket upgrade proxying to standalone Zen service
-  server.on("upgrade", (req, socket, head) => {
+  server.on("upgrade", (req: any, socket: any, head: any) => {
     if (req.url?.startsWith("/zen")) {
+      // Patch raw socket to track stats for dashboard
+      const addr = req.headers['x-forwarded-for'] || req.socket.remoteAddress || "unknown";
+      statsTracker.patchRawSocket(socket, addr as string, "zen");
+      
       // @ts-ignore
       zenProxy.upgrade(req, socket, head);
     }
