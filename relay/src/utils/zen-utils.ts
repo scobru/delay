@@ -19,7 +19,7 @@ export async function waitForZenData(
     // Watch for data arrivals in real-time
     node.on((val: any) => {
       // Specifically wait for a non-empty string, as kfrags are base64 strings.
-      // This prevents resolving prematurely with GunDB metadata objects {}.
+      // This prevents resolving prematurely with Zen metadata objects {}.
       if (!resolved && typeof val === 'string' && val.trim().length > 0) {
         resolved = true;
         clearTimeout(timer);

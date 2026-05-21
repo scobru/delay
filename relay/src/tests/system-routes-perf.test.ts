@@ -31,12 +31,12 @@ vi.mock("../config/env-config", () => ({
   },
 }));
 
-vi.mock("../utils/gun-paths", () => ({
-  GUN_PATHS: {
+vi.mock("../utils/zen-paths", () => ({
+  ZEN_PATHS: {
     SHOGUN: "shogun",
     LOGS: "logs",
   },
-  getGunNode: vi.fn(() => ({
+  getZenNode: vi.fn(() => ({
     once: vi.fn(),
     put: vi.fn(),
     get: vi.fn(() => ({ put: vi.fn() })),

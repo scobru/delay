@@ -35,8 +35,8 @@ vi.mock("../utils/openapi-generator", () => ({
   generateOpenAPISpec: vi.fn(),
 }));
 
-vi.mock("../utils/gun-storage-stats", () => ({
-  getGunStorageStats: vi.fn().mockResolvedValue({ bytes: 0, backend: "mock" }),
+vi.mock("../utils/zen-storage-stats", () => ({
+  getZenStorageStats: vi.fn().mockResolvedValue({ bytes: 0, backend: "mock" }),
 }));
 
 describe("Debug Config Exposure Vulnerability", () => {

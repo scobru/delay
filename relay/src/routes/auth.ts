@@ -5,12 +5,12 @@ const router: express.Router = express.Router();
 
 // Helper to get gun instance safely
 const getGun = (req: Request) => {
-  return req.app.get("zenInstance") || req.app.get("gunInstance");
+  return req.app.get("zenInstance") || req.app.get("zenInstance");
 };
 
 /**
  * POST /api/v1/auth/register
- * Create a new GunDB user on the Relay
+ * Create a new Zen user on the Relay
  */
 router.post("/register", async (req: Request, res: Response) => {
   try {
@@ -25,7 +25,7 @@ router.post("/register", async (req: Request, res: Response) => {
 
     const gun = getGun(req);
     if (!gun) {
-      return res.status(503).json({ success: false, error: "GunDB not initialized" });
+      return res.status(503).json({ success: false, error: "Zen not initialized" });
     }
 
     // Check if username is already taken
@@ -91,7 +91,7 @@ router.post("/register", async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/auth/login
- * Authenticate a GunDB user on the Relay
+ * Authenticate a Zen user on the Relay
  */
 router.post("/login", async (req: Request, res: Response) => {
   try {
@@ -106,7 +106,7 @@ router.post("/login", async (req: Request, res: Response) => {
 
     const gun = getGun(req);
     if (!gun) {
-      return res.status(503).json({ success: false, error: "GunDB not initialized" });
+      return res.status(503).json({ success: false, error: "Zen not initialized" });
     }
 
     const user = gun.user();
@@ -148,7 +148,7 @@ router.get("/check-username/:username", async (req: Request, res: Response) => {
     const gun = getGun(req);
     
     if (!gun) {
-      return res.status(503).json({ success: false, error: "GunDB not initialized" });
+      return res.status(503).json({ success: false, error: "Zen not initialized" });
     }
 
     const existing = await new Promise((resolve) => {

@@ -67,7 +67,7 @@ describe("System Routes Security", () => {
     app.use(express.json());
 
     // Mock gun instance for the router
-    app.set("gunInstance", {
+    app.set("zenInstance", {
       _: { opt: { peers: {} } },
       get: vi.fn().mockReturnThis(),
       put: vi.fn().mockImplementation((val, cb) => cb({ err: null })),

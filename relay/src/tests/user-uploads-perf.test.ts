@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
-// We'll mock GunDB in-memory structure since actual GunDB test setup is slow/hanging
+// We'll mock Zen in-memory structure since actual Zen test setup is slow/hanging
 class MockGunNode {
   data: any = {};
   callbacks: Array<(...args: any[]) => any> = [];
@@ -40,7 +40,7 @@ class MockGun {
   get(key: string) { return this.root.get(key); }
 }
 
-const GUN_PATHS = { UPLOADS: 'uploads' };
+const ZEN_PATHS = { UPLOADS: 'uploads' };
 
 async function getUserUploadsFromGun(gun: any, userAddress: string): Promise<any[]> {
   return new Promise((resolve) => {
@@ -48,7 +48,7 @@ async function getUserUploadsFromGun(gun: any, userAddress: string): Promise<any
     const timer = setTimeout(() => resolve(uploads), 300);
 
     gun
-      .get(GUN_PATHS.UPLOADS)
+      .get(ZEN_PATHS.UPLOADS)
       .get(userAddress)
       .map()
       .on((data: any, key: string) => {
@@ -68,7 +68,7 @@ async function getUserUploadByHashFromGun(gun: any, userAddress: string, hash: s
     const timer = setTimeout(() => resolve(null), 300);
 
     gun
-      .get(GUN_PATHS.UPLOADS)
+      .get(ZEN_PATHS.UPLOADS)
       .get(userAddress)
       .get(hash)
       .once((data: any) => {
@@ -96,7 +96,7 @@ describe("Uploads Performance", () => {
     gun = new MockGun();
     for (let i = 0; i < numUploads; i++) {
       const hash = i === 5000 ? targetHash : `QmFakeHash${i}`;
-      gun.get(GUN_PATHS.UPLOADS).get(userAddress).get(hash).put({
+      gun.get(ZEN_PATHS.UPLOADS).get(userAddress).get(hash).put({
         hash,
         name: `file-${i}.txt`,
         size: 1024,

@@ -8,7 +8,6 @@ interface StorageStats {
   radata: { formatted: string; files: number; description: string };
   breakdown: {
     ipfs: { formatted: string; files: number };
-    gundb: { formatted: string; files: number };
     zen: { formatted: string; files: number };
   };
 }
@@ -421,15 +420,7 @@ function Settings() {
                       {storageStats.breakdown.ipfs.files} files
                     </div>
                   </div>
-                  <div className="bg-base-200 p-3 rounded-lg">
-                    <div className="text-sm font-medium">🌊 ZEN (database)</div>
-                    <div className="text-lg font-bold">
-                      {storageStats.breakdown.gundb.formatted}
-                    </div>
-                    <div className="text-xs text-base-content/60">
-                      {storageStats.breakdown.gundb.files} records/files
-                    </div>
-                  </div>
+
                   <div className="bg-base-200 p-3 rounded-lg">
                     <div className="text-sm font-medium">🌊 ZEN (radata)</div>
                     <div className="text-lg font-bold">

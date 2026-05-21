@@ -1,11 +1,11 @@
 /**
- * Unified GunDB paths for the Shogun network
+ * Unified Zen Database paths for the Shogun network
  *
  * These paths are shared between delay and shogun-mule
  * to ensure consistent network discovery and communication.
  */
 
-export const GUN_PATHS = {
+export const ZEN_PATHS = {
   // Base
   SHOGUN: "shogun",
   SHOGUN_INDEX: "shogun/index",
@@ -36,19 +36,19 @@ export const GUN_PATHS = {
   WORMHOLE_TRANSFERS: "transfers", // Relative to SHOGUN_WORMHOLE
 } as const;
 
-type GunPath = (typeof GUN_PATHS)[keyof typeof GUN_PATHS];
+type ZenPath = (typeof ZEN_PATHS)[keyof typeof ZEN_PATHS];
 
 /**
- * Helper to get a Gun node from a unified path string
+ * Helper to get a Zen node from a unified path string
  * Handles splitting path by '/' and traversing the graph hierarchically
  *
- * @param gun - Gun instance
+ * @param zen - Zen instance
  * @param path - Path string (e.g. 'shogun/network/relays')
- * @returns - Gun node at the end of the path
+ * @returns - Zen node at the end of the path
  */
-export const getGunNode = (gun: any, path: string): any => {
+export const getZenNode = (zen: any, path: string): any => {
   const parts = path.split("/");
-  let node = gun;
+  let node = zen;
   for (const part of parts) {
     node = node.get(part);
   }

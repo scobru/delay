@@ -48,7 +48,7 @@ export const config = {
     endpoint: process.env.RELAY_HOST || ip.address(),
     environment: process.env.NODE_ENV || "development",
     protected: process.env.RELAY_PROTECTED === "true",
-    // GunDB peers
+    // Zen peers
     peers: (() => {
       const peersEnv = process.env.GUN_PEERS || process.env.RELAY_PEERS;
       if (peersEnv) {

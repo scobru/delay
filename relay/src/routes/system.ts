@@ -6,7 +6,7 @@ import dns from "dns/promises";
 import { loggers } from "../utils/logger";
 import { packageConfig } from "../config";
 import { config } from "../config/env-config";
-import { GUN_PATHS, getGunNode } from "../utils/gun-paths";
+import { ZEN_PATHS, getZenNode } from "../utils/zen-paths";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 
 // Helper to read the last N lines of a file without loading the entire file into memory
@@ -69,11 +69,6 @@ async function readLastLines(filePath: string, numLines: number): Promise<string
 
 const router: Router = express.Router();
 
-// Middleware per ottenere l'istanza Gun/ZEN dal relay
-const getGunInstance = (req: Request): any => {
-  return req.app.get("zenInstance") || req.app.get("gunInstance");
-};
-
 // Middleware per ottenere l'istanza ZEN dal relay
 const getZenInstance = (req: Request): any => {
   return req.app.get("zenInstance");
@@ -127,10 +122,10 @@ router.get("/zen-status", async (req, res) => {
 // All data endpoint (requires authentication)
 router.get("/alldata", adminAuthMiddleware, (req, res) => {
   try {
-    const gun = getGunInstance(req);
+    const gun = getZenInstance(req);
 
     // Get all data from Gun database
-    getGunNode(gun, GUN_PATHS.SHOGUN).once((data: any) => {
+    getZenNode(gun, ZEN_PATHS.SHOGUN).once((data: any) => {
       res.json({
         success: true,
         data: data,
@@ -228,9 +223,9 @@ router.get("/node/*", adminAuthMiddleware, async (req, res) => {
   try {
     // @ts-ignore - req.params is an array for wildcard routes
     const path: string = req.params[0] as string;
-    const gun = getGunInstance(req);
+    const gun = getZenInstance(req);
 
-    const node = getGunNode(gun, path);
+    const node = getZenNode(gun, path);
 
     // Promisify with timeout
     const data = await new Promise((resolve, reject) => {
@@ -280,7 +275,7 @@ router.get("/zen/node/*", adminAuthMiddleware, async (req, res) => {
 
     if (!zen) return res.status(503).json({ success: false, error: "ZEN not enabled" });
 
-    const node = getGunNode(zen, path);
+    const node = getZenNode(zen, path);
     const data = await new Promise((resolve) => {
       const timer = setTimeout(() => resolve(undefined), 5000);
       node.once((data: any) => {
@@ -311,7 +306,7 @@ router.post("/zen/node/*", adminAuthMiddleware, async (req, res) => {
     if (!zen) return res.status(503).json({ success: false, error: "ZEN not enabled" });
     if (!path) return res.status(400).json({ success: false, error: "Path required" });
 
-    const node = getGunNode(zen, path);
+    const node = getZenNode(zen, path);
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Timeout")), 10000);
       node.put(data, (ack: any) => {
@@ -335,7 +330,7 @@ router.delete("/zen/node/*", adminAuthMiddleware, async (req, res) => {
 
     if (!zen) return res.status(503).json({ success: false, error: "ZEN not enabled" });
 
-    const node = getGunNode(zen, path);
+    const node = getZenNode(zen, path);
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Timeout")), 10000);
       node.put(null, (ack: any) => {
@@ -356,7 +351,7 @@ router.post("/node/*", adminAuthMiddleware, async (req, res) => {
     // @ts-ignore - req.params is an array for wildcard routes
     const path: string = req.params[0] as string;
     const { data } = req.body;
-    const gun = getGunInstance(req);
+    const gun = getZenInstance(req);
 
     if (!path || path.trim() === "") {
       return res.status(400).json({ success: false, error: "Node path cannot be empty." });
@@ -373,7 +368,7 @@ router.post("/node/*", adminAuthMiddleware, async (req, res) => {
 
     loggers.server.debug({ path, data }, `📝 Creating node`);
 
-    const node = getGunNode(gun, path);
+    const node = getZenNode(gun, path);
 
     try {
       // Properly promisify the Gun put operation
@@ -420,7 +415,7 @@ router.delete("/node/*", adminAuthMiddleware, async (req, res) => {
   try {
     // @ts-ignore - req.params is an array for wildcard routes
     const path: string = req.params[0] as string;
-    const gun = getGunInstance(req);
+    const gun = getZenInstance(req);
 
     if (!path || path.trim() === "") {
       return res.status(400).json({ success: false, error: "Node path cannot be empty." });
@@ -428,7 +423,7 @@ router.delete("/node/*", adminAuthMiddleware, async (req, res) => {
 
     loggers.server.debug({ path }, `🗑️ Deleting node`);
 
-    const node = getGunNode(gun, path);
+    const node = getZenNode(gun, path);
 
     try {
       // Properly promisify the Gun delete operation
@@ -591,26 +586,26 @@ router.get("/logs", adminAuthMiddleware, async (req, res) => {
   }
 });
 
-// Clear logs endpoint (clears GunDB logs only)
+// Clear logs endpoint (clears Zen logs only)
 router.delete("/logs", adminAuthMiddleware, (req, res) => {
   try {
-    const gun = getGunInstance(req);
-    const logsNode = getGunNode(gun, GUN_PATHS.LOGS);
+    const gun = getZenInstance(req);
+    const logsNode = getZenNode(gun, ZEN_PATHS.LOGS);
 
     try {
-      // Clear GunDB logs only (file logs are managed by the system)
+      // Clear Zen logs only (file logs are managed by the system)
       logsNode.put(null, (ack: any) => {
         if (ack.err) {
-          loggers.server.error({ err: ack.err }, "❌ Error clearing GunDB logs");
+          loggers.server.error({ err: ack.err }, "❌ Error clearing Zen logs");
           res.status(500).json({
             success: false,
             error: ack.err,
           });
         } else {
-          loggers.server.info("✅ GunDB logs cleared successfully");
+          loggers.server.info("✅ Zen logs cleared successfully");
           res.json({
             success: true,
-            message: "GunDB logs cleared successfully (file logs are managed by the system)",
+            message: "Zen logs cleared successfully (file logs are managed by the system)",
             timestamp: Date.now(),
           });
         }
@@ -630,7 +625,7 @@ router.delete("/logs", adminAuthMiddleware, (req, res) => {
 // Peers endpoints
 router.get("/peers", adminAuthMiddleware, (req, res) => {
   try {
-    const gun = getGunInstance(req);
+    const gun = getZenInstance(req);
 
     // Get peers information
     // Use optional chaining to prevent crashes if the instance is not fully initialized
@@ -654,7 +649,7 @@ router.get("/peers", adminAuthMiddleware, (req, res) => {
 router.post("/peers/add", adminAuthMiddleware, (req, res) => {
   try {
     const { peer } = req.body;
-    const gun = getGunInstance(req);
+    const gun = getZenInstance(req);
 
     if (!peer) {
       return res.status(400).json({

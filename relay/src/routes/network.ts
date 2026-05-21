@@ -1,5 +1,5 @@
 import express, { Router, Request, Response } from "express";
-import { getGunNode, GUN_PATHS } from "../utils/gun-paths";
+import { getZenNode, ZEN_PATHS } from "../utils/zen-paths";
 import { tokenAuthMiddleware } from "../middleware/token-auth";
 import { loggers } from "../utils/logger";
 import { kprs } from "../utils/zen-network";
@@ -13,7 +13,7 @@ const router: Router = express.Router();
  */
 router.get("/relays", tokenAuthMiddleware, async (req: Request, res: Response) => {
   try {
-    const gun = req.app.get("zenInstance") || req.app.get("gunInstance");
+    const gun = req.app.get("zenInstance") || req.app.get("zenInstance");
     if (!gun) {
       return res.status(503).json({ success: false, error: "Storage engine not ready" });
     }
@@ -45,7 +45,7 @@ router.get("/relays", tokenAuthMiddleware, async (req: Request, res: Response) =
     });
 
     // Fetch relays from the Gun global discovery path
-    const relaysNode = getGunNode(gun, GUN_PATHS.RELAYS);
+    const relaysNode = getZenNode(gun, ZEN_PATHS.RELAYS);
     
     // Use a timeout for Gun once() to avoid hanging if the network is slow
     const gunData = await new Promise<any>((resolve) => {

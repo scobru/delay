@@ -11,8 +11,6 @@ import ZEN from "zen";
 import "zen/lib/multicast.js";
 
 import multer from "multer";
-import SQLiteStore from "./utils/sqlite-store";
-import S3Store from "./utils/s3-store";
 import { loggers } from "./utils/logger";
 import { StatsTracker } from "./utils/stats-tracker";
 import {
@@ -34,7 +32,7 @@ import { startWormholeCleanup } from "./utils/wormhole-cleanup";
 import { tokenAuthMiddleware } from "./middleware/token-auth";
 import { secureCompare, hashToken, createProductionErrorHandler, isOriginAllowed } from "./utils/security";
 
-import { GUN_PATHS, getGunNode } from "./utils/gun-paths";
+import { ZEN_PATHS, getZenNode } from "./utils/zen-paths";
 
 import { gunAliasGuard } from "./middleware/gun-alias-guard";
 import { latchDomain } from "./utils/zen-network";
@@ -45,35 +43,6 @@ import { latchDomain } from "./utils/zen-network";
 
 dotenv.config();
 
-// --- Console Interceptor to Silence GunDB Spam ---
-const originalConsoleLog = console.log;
-const originalConsoleDir = console.dir;
-
-function isGunSpam(args: any[]) {
-  if (args.length === 0) return false;
-  const firstArg = args[0];
-  // Gun unverified data spam usually looks like an object with 'err': 'Unverified data.' or similar raw Gun graph nodes
-  if (typeof firstArg === "object" && firstArg !== null) {
-    if (firstArg.err === "Unverified data." || firstArg.err === "Signature did not match.") {
-      return true;
-    }
-    // Also ignore raw object dumps that look like Gun graph nodes with '#' and '><'
-    if (firstArg["#"] && (firstArg["><"] || firstArg["@"])) {
-      return true;
-    }
-  }
-  return false;
-}
-
-console.log = function (...args) {
-  if (isGunSpam(args)) return;
-  originalConsoleLog.apply(console, args);
-};
-
-console.dir = function (...args) {
-  if (isGunSpam(args)) return;
-  originalConsoleDir.apply(console, args);
-};
 // -------------------------------------------------
 
 // --- IPFS Configuration ---
@@ -100,7 +69,7 @@ let path_public = serverConfig.publicPath;
 
 /**
  * Main server initialization function
- * Sets up Express, GunDB, Holster, and all routes
+ * Sets up Express, Zen, and all routes
  * @returns {Promise<void>}
  */
 async function initializeServer() {
@@ -112,7 +81,7 @@ async function initializeServer() {
   loggers.server.info("🚀 Delay v1.0.1 - FORCE UPDATE");
 
   /**
-   * System logging function (console only, no GunDB storage)
+   * System logging function (console only)
    * @param {string} level - Log level (info, warn, error, etc.)
    * @param {string} message - Log message
    * @param {any} [data=null] - Optional data to log
@@ -366,7 +335,7 @@ async function initializeServer() {
     try {
       // Check if essential services are ready
       const checks = {
-        gun: !!app.get("gunInstance"),
+        zen: !!app.get("zenInstance"),
       };
 
       const allReady = Object.values(checks).every(Boolean);
@@ -535,14 +504,8 @@ async function initializeServer() {
   const peers = relayConfig.peers;
   loggers.server.info({ peers }, "🔍 Peers");
 
-  // Initialize Gun with storage (SQLite, radisk, or S3)
-  // Initialize ZEN with storage (SQLite, radisk, or S3)
-  const dataDir = storageConfig.dataDir;
-  loggers.server.info({ dataDir }, "📁 Data directory");
-
   // Storage is handled out-of-process by the standalone Zen service on 8420.
   // We act as a client connecting to it.
-  const store = null;
 
   // Configure ZEN options as a lightweight client
   const zenOptions: any = {
@@ -562,11 +525,8 @@ async function initializeServer() {
 
   // Store Zen instance in express app for access from routes
   app.set("zenInstance", zen);
-  app.set("gunInstance", zen);
-  app.set("gunStore", null);
 
   (global as any).zenInstance = zen;
-  (global as any).gunInstance = zen;
 
   loggers.server.info("✅ ZEN Client Instance successfully initialized");
 
@@ -606,10 +566,7 @@ async function initializeServer() {
     loggers.server.info(`⏭️ Wormhole cleanup disabled (WORMHOLE_ENABLED=false)`);
   }
 
-  // Note: "Data hash not same as hash!" warnings from GunDB are benign
-  // They occur when using content-addressed storage with # namespace
-  // The data is still saved correctly - this is just GunDB's internal verification
-  // These warnings don't affect functionality and can be safely ignored
+
 
 
   // Get relay host identifier
@@ -626,7 +583,7 @@ async function initializeServer() {
   }
 
   // Initialize Generic Services (Linda functionality)
-  // DISABLED: Services removed as client migrated to pure GunDB
+  // DISABLED: Services removed as client migrated to pure Zen
   /*
     try {
       const { initServices } = await import("./services/manager");
@@ -685,7 +642,7 @@ async function initializeServer() {
   app.use(express.static(publicPath));
 
   // Set up relay stats database
-  const db = getGunNode(zen, GUN_PATHS.RELAYS).get(host);
+  const db = getZenNode(zen, ZEN_PATHS.RELAYS).get(host);
 
   // Pulse stats are now driven by StatsTracker
 
@@ -806,7 +763,7 @@ async function initializeServer() {
       pulse.ipfs = { connected: false, error: e.message };
     }
 
-    // CRITICAL: Save pulse to GunDB relays namespace for network discovery
+    // CRITICAL: Save pulse to Zen relays namespace for network discovery
     try {
       // Save pulse with timestamp for filtering
       const relayData = {
@@ -829,10 +786,10 @@ async function initializeServer() {
         }
       }
 
-      getGunNode(zen, GUN_PATHS.RELAYS).get(host).put(relayData);
+      getZenNode(zen, ZEN_PATHS.RELAYS).get(host).put(relayData);
 
       // Also save to a separate pulse namespace for easier querying
-      getGunNode(zen, GUN_PATHS.RELAYS).get(host).get("pulse").put(pulse);
+      getZenNode(zen, ZEN_PATHS.RELAYS).get(host).get("pulse").put(pulse);
 
       // Log pulse only in debug mode to avoid console spam
       loggers.server.debug(
@@ -845,7 +802,7 @@ async function initializeServer() {
         `📡 Pulse saved to relays`
       );
     } catch (e: any) {
-      loggers.server.warn({ err: e.message }, "Failed to save pulse to GunDB relays namespace");
+      loggers.server.warn({ err: e.message }, "Failed to save pulse to Zen relays namespace");
       loggers.server.debug(
         {
           host,
@@ -867,20 +824,11 @@ async function initializeServer() {
     loggers.server.info("🛑 Shutting down Delay...");
 
     // Give a grace period for in-flight operations to complete
-    // GunDB may still have pending operations, so we wait a bit longer
+    // Zen may still have pending operations, so we wait a bit longer
     loggers.server.info("⏳ Waiting for in-flight operations to complete...");
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Close storage store if it exists (SQLite or S3)
-    // The store will gracefully handle any remaining GunDB operations
-    if (store as any) {
-      try {
-        (store as any).close();
-        loggers.server.info("✅ Storage store closed");
-      } catch (err: any) {
-        loggers.server.error({ err }, "Error closing storage store");
-      }
-    }
+
 
     // Close server
     if (server) {

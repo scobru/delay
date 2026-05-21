@@ -8,7 +8,7 @@
 
 import { loggers } from "./logger";
 import { wormholeConfig, ipfsConfig } from "../config/env-config";
-import { GUN_PATHS, getGunNode } from "./gun-paths";
+import { ZEN_PATHS, getZenNode } from "./zen-paths";
 
 const log = loggers.server || console;
 
@@ -134,8 +134,8 @@ async function runWormholeCleanup(zen: any): Promise<void> {
         }
 
         // Remove from Zen index
-        getGunNode(zen, GUN_PATHS.SHOGUN_WORMHOLE)
-          .get(GUN_PATHS.WORMHOLE_TRANSFERS)
+        getZenNode(zen, ZEN_PATHS.SHOGUN_WORMHOLE)
+          .get(ZEN_PATHS.WORMHOLE_TRANSFERS)
           .get(code)
           .put(null as any);
 
@@ -189,8 +189,8 @@ async function getWormholeTransfers(
       });
     };
 
-    getGunNode(zen, GUN_PATHS.SHOGUN_WORMHOLE)
-      .get(GUN_PATHS.WORMHOLE_TRANSFERS)
+    getZenNode(zen, ZEN_PATHS.SHOGUN_WORMHOLE)
+      .get(ZEN_PATHS.WORMHOLE_TRANSFERS)
       .map()
       .once(handler);
 

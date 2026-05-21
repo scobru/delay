@@ -7,7 +7,7 @@ import fs from "fs";
 import multer from "multer";
 import FormData from "form-data";
 import { secureCompare, hashToken } from "../utils/security";
-import { getGunStorageStats } from "../utils/gun-storage-stats";
+import { getZenStorageStats } from "../utils/zen-storage-stats";
 // http import removed
 
 const __filename = fileURLToPath(import.meta.url);
@@ -736,7 +736,7 @@ export default async (app: express.Application) => {
 
       const activeWires = app.get("activeWires") || 0;
       const totalConnections = app.get("totalConnections") || 0;
-      const gunInstance = app.get("gunInstance");
+      const zenInstance = app.get("zenInstance");
       const holsterInstance = app.get("holsterInstance");
 
       const healthData = {
@@ -767,7 +767,7 @@ export default async (app: express.Application) => {
           name: relayConfig.name,
         },
         services: {
-          gun: gunInstance ? "active" : "inactive",
+          gun: zenInstance ? "active" : "inactive",
           zen: app.get("zenInstance") ? "active" : "inactive",
           holster: holsterInstance ? "active" : "inactive",
           ipfs: ipfsConfig.enabled ? "enabled" : "disabled",
@@ -865,10 +865,9 @@ export default async (app: express.Application) => {
         const ipfsStats = await getDirSize(path.join(dataDir, "ipfs"));
         const zenStats = await getDirSize(zenConfig.dataDir || path.join(dataDir, "zendata"));
 
-        // Get GunDB storage stats from the configured backend (sqlite, s3, or radisk)
         // Pass the store instance if available for accurate stats
-        const gunStore = req.app.get("gunStore");
-        const gundbStats = await getGunStorageStats(gunStore);
+        const zenStore = req.app.get("zenStore");
+        const gundbStats = await getZenStorageStats();
 
         const totalBytes = dataStats.bytes + radataStats.bytes + zenStats.bytes;
 
@@ -885,7 +884,7 @@ export default async (app: express.Application) => {
               ...formatSize(radataStats.bytes),
               path: radataDir,
               files: radataStats.files,
-              description: "GunDB radix storage",
+              description: "Zen radix storage",
             },
             breakdown: {
               ipfs: {
@@ -893,16 +892,7 @@ export default async (app: express.Application) => {
                 path: path.join(dataDir, "ipfs"),
                 files: ipfsStats.files,
               },
-              gundb: {
-                ...formatSize(gundbStats.bytes),
-                backend: gundbStats.backend,
-                files: gundbStats.files,
-                description: gundbStats.description,
-                ...(gundbStats.path ? { path: gundbStats.path } : {}),
-                ...(gundbStats.bucket
-                  ? { bucket: gundbStats.bucket, endpoint: gundbStats.endpoint }
-                  : {}),
-              },
+
               zen: {
                 ...formatSize(zenStats.bytes),
                 path: zenConfig.dataDir || path.join(dataDir, "zendata"),

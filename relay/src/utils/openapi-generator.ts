@@ -253,7 +253,7 @@ export function generateOpenAPISpec(baseUrl: string = "http://localhost:8421"): 
           tags: ["User Uploads"],
           summary: "Get system hashes map",
           description:
-            "Get the complete system hashes map with metadata for all files. Returns all file metadata stored in the GunDB systemhash node.",
+            "Get the complete system hashes map with metadata for all files. Returns all file metadata stored in the Zen systemhash node.",
           operationId: "getSystemHashesMap",
           security: [{ bearerAuth: [] }, { tokenHeader: [] }],
           responses: {
@@ -695,7 +695,7 @@ export function generateOpenAPISpec(baseUrl: string = "http://localhost:8421"): 
           tags: ["User Uploads"],
           summary: "Save file metadata to system hash map",
           description:
-            "Save file or directory metadata to the GunDB systemhash node. Used by drive applications to track file metadata.",
+            "Save file or directory metadata to the Zen systemhash node. Used by drive applications to track file metadata.",
           operationId: "saveSystemHash",
           security: [{ bearerAuth: [] }, { tokenHeader: [] }],
           requestBody: {
@@ -771,7 +771,7 @@ export function generateOpenAPISpec(baseUrl: string = "http://localhost:8421"): 
               },
             },
             "500": {
-              description: "Server error - GunDB not available",
+              description: "Server error - Zen not available",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },
@@ -787,7 +787,7 @@ export function generateOpenAPISpec(baseUrl: string = "http://localhost:8421"): 
           tags: ["User Uploads"],
           summary: "Remove file metadata from system hash map",
           description:
-            "Remove file metadata from the GunDB systemhash node. Used when deleting files from drive applications.",
+            "Remove file metadata from the Zen systemhash node. Used when deleting files from drive applications.",
           operationId: "removeSystemHash",
           security: [{ bearerAuth: [] }, { tokenHeader: [] }],
           parameters: [
@@ -849,7 +849,7 @@ export function generateOpenAPISpec(baseUrl: string = "http://localhost:8421"): 
               },
             },
             "500": {
-              description: "Server error - GunDB not available",
+              description: "Server error - Zen not available",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/Error" },

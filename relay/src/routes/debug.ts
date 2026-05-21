@@ -1,13 +1,13 @@
 import express, { Request, Response, Router } from "express";
 import { loggers } from "../utils/logger";
-import { GUN_PATHS } from "../utils/gun-paths";
+import { ZEN_PATHS } from "../utils/zen-paths";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 
 const router: Router = express.Router();
 
 // Middleware per ottenere l'istanza Gun/ZEN dal relay
-const getGunInstance = (req: Request): any => {
-  return req.app.get("zenInstance") || req.app.get("gunInstance");
+const getZenInstance = (req: Request): any => {
+  return req.app.get("zenInstance") || req.app.get("zenInstance");
 };
 
 
@@ -15,7 +15,7 @@ const getGunInstance = (req: Request): any => {
 // Test Gun operations endpoint
 router.get("/test-gun", adminAuthMiddleware, async (req: Request, res: Response) => {
   try {
-    const gun = getGunInstance(req);
+    const gun = getZenInstance(req);
 
     loggers.server.debug("🧪 Testing Gun operations");
 
@@ -25,7 +25,7 @@ router.get("/test-gun", adminAuthMiddleware, async (req: Request, res: Response)
       message: "Gun test successful",
     };
 
-    const testNode = gun.get(GUN_PATHS.TEST);
+    const testNode = gun.get(ZEN_PATHS.TEST);
 
     const writeTest = () => {
       return new Promise((resolve, reject) => {
@@ -89,7 +89,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const { identifier, hash } = req.params;
-      const gun = getGunInstance(req);
+      const gun = getZenInstance(req);
 
       loggers.server.debug({ identifier, hash }, `🧪 Testing Gun save`);
 
@@ -102,7 +102,7 @@ router.get(
         test: true,
       };
 
-      const testNode = gun.get(GUN_PATHS.UPLOADS).get(identifier).get(hash);
+      const testNode = gun.get(ZEN_PATHS.UPLOADS).get(identifier).get(hash);
 
       const writeTest = () => {
         return new Promise((resolve, reject) => {

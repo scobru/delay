@@ -115,7 +115,7 @@ export class StatsTracker {
       }
 
       // OPTIMIZATION: Avoid full JSON.parse for every message
-      // GunDB messages usually start with {"put":, {"get":, or contain "@" for acks
+      // Zen messages usually start with {"put":, {"get":, or contain "@" for acks
       // This reduces CPU load significantly under high traffic
       try {
         if (typeof raw === "string") {

@@ -19,7 +19,7 @@ declare namespace NodeJS {
     IPFS_API_TOKEN?: string;
     IPFS_PIN_TIMEOUT_MS?: string;
 
-    // GunDB Configuration
+    // Zen Configuration
     RELAY_SEA_KEYPAIR?: string;
     RELAY_SEA_KEYPAIR_PATH?: string;
     GUN_PEERS?: string;

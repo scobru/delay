@@ -50,7 +50,7 @@ describe("Auth Security", () => {
       })
     };
 
-    app.set("gunInstance", mockGun);
+    app.set("zenInstance", mockGun);
     app.use("/api/v1/auth", authRouter);
   });
 
