@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Graph from "../components/Graph";
 import { useAuth } from "../context/AuthContext";
-import { ZEN_PATHS } from "../utils/zen-paths";
 
 interface GraphNode {
   id: string;
@@ -25,7 +24,7 @@ function VisualGraph() {
     edges: [],
   });
   const [loading, setLoading] = useState(false);
-  const [path, setPath] = useState<string>(ZEN_PATHS.SHOGUN);
+  const [path, setPath] = useState<string>("");
   const [peerUrl, setPeerUrl] = useState("");
 
   const [nodeCount, setNodeCount] = useState(0);
@@ -164,10 +163,7 @@ function VisualGraph() {
     }
   };
 
-  useEffect(() => {
-    // Initial exploration
-    exploreData(ZEN_PATHS.SHOGUN);
-  }, []);
+  // No auto-load of presets on mount
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl">
@@ -223,78 +219,37 @@ function VisualGraph() {
             </form>
           </div>
 
-          <div className="flex flex-wrap gap-2 mt-4 items-center">
-            <span className="text-xs font-bold opacity-60 uppercase tracking-wider">
-              Quick Load:
-            </span>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => {
-                setPath(ZEN_PATHS.SHOGUN);
-                exploreData(ZEN_PATHS.SHOGUN);
-              }}
-            >
-              Root
-            </button>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => {
-                setPath(ZEN_PATHS.RELAYS);
-                exploreData(ZEN_PATHS.RELAYS);
-              }}
-            >
-              Relays
-            </button>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => {
-                setPath(ZEN_PATHS.SHOGUN_WORMHOLE);
-                exploreData(ZEN_PATHS.SHOGUN_WORMHOLE);
-              }}
-            >
-              Wormhole
-            </button>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => {
-                setPath(ZEN_PATHS.SHOGUN_INDEX);
-                exploreData(ZEN_PATHS.SHOGUN_INDEX);
-              }}
-            >
-              Index
-            </button>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => {
-                setPath(ZEN_PATHS.ANNAS_ARCHIVE);
-                exploreData(ZEN_PATHS.ANNAS_ARCHIVE);
-              }}
-            >
-              Anna's Archive
-            </button>
-          </div>
+          {/* No Quick Paths preset */}
         </div>
       </div>
 
       <div className="card bg-base-100 shadow h-[650px]">
         <div className="card-body p-0 overflow-hidden rounded-xl">
-          <Graph
-            graph={graphData}
-            options={options}
-            events={{
-              select: (event: any) => {
-                const { nodes } = event;
-                if (nodes.length > 0) {
-                  const nodeId = nodes[0];
-                  // If clicking a child node that is effectively a path, explore it
-                  if (nodeId.includes("/") && nodeId !== path) {
-                    setPath(nodeId);
-                    exploreData(nodeId);
+          {nodeCount === 0 && !loading ? (
+            <div className="flex flex-col items-center justify-center h-full text-base-content/50 gap-2">
+              <span className="text-4xl">🕸️</span>
+              <p className="font-medium text-lg">Enter a ZenDB node path above to visualize the graph</p>
+              <p className="text-sm opacity-75">For example: shogun, shogun/network/relays, or any custom path.</p>
+            </div>
+          ) : (
+            <Graph
+              graph={graphData}
+              options={options}
+              events={{
+                select: (event: any) => {
+                  const { nodes } = event;
+                  if (nodes.length > 0) {
+                    const nodeId = nodes[0];
+                    // If clicking a child node that is effectively a path, explore it
+                    if (nodeId.includes("/") && nodeId !== path) {
+                      setPath(nodeId);
+                      exploreData(nodeId);
+                    }
                   }
-                }
-              },
-            }}
-          />
+                },
+              }}
+            />
+          )}
         </div>
       </div>
     </div>

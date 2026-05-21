@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { ZEN_PATHS } from "../utils/zen-paths";
 
 interface NodeData {
   [key: string]: any;
@@ -8,7 +7,7 @@ interface NodeData {
 
 function GraphExplorer() {
   const { isAuthenticated, getAuthHeaders } = useAuth();
-  const [currentPath, setCurrentPath] = useState<string>(ZEN_PATHS.SHOGUN);
+  const [currentPath, setCurrentPath] = useState<string>("");
   const [data, setData] = useState<NodeData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,7 +21,12 @@ function GraphExplorer() {
   const [peerStatus, setPeerStatus] = useState("");
 
   useEffect(() => {
-    fetchNodeData(currentPath);
+    if (currentPath) {
+      fetchNodeData(currentPath);
+    } else {
+      setData(null);
+      setError("");
+    }
   }, [currentPath]);
 
   const fetchNodeData = async (path: string) => {
@@ -55,14 +59,14 @@ function GraphExplorer() {
   };
 
   const handleJumpToRoot = () => {
-    setCurrentPath(ZEN_PATHS.SHOGUN);
+    setCurrentPath("");
   };
 
   const handleBack = () => {
-    if (!currentPath || currentPath === ZEN_PATHS.SHOGUN) return;
+    if (!currentPath) return;
     const parts = currentPath.split("/");
     parts.pop();
-    setCurrentPath(parts.join("/") || ZEN_PATHS.SHOGUN);
+    setCurrentPath(parts.join("/"));
   };
 
   const handleWrite = async (e: React.FormEvent) => {
@@ -179,12 +183,12 @@ function GraphExplorer() {
               <button
                 className="btn btn-neutral btn-sm"
                 onClick={handleBack}
-                disabled={currentPath === ZEN_PATHS.SHOGUN}
+                disabled={!currentPath}
               >
                 ⬅ Back
               </button>
               <button className="btn btn-neutral btn-sm" onClick={handleJumpToRoot}>
-                🏠 Root
+                🏠 Clear
               </button>
             </div>
           </div>
@@ -210,42 +214,7 @@ function GraphExplorer() {
             </form>
           </div>
 
-          {/* Quick Paths */}
-          <div className="flex flex-wrap gap-2 mt-3 items-center">
-            <span className="text-xs font-bold opacity-60 uppercase tracking-wider">
-              Quick Load:
-            </span>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(ZEN_PATHS.SHOGUN)}
-            >
-              Root
-            </button>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(ZEN_PATHS.RELAYS)}
-            >
-              Relays
-            </button>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(ZEN_PATHS.SHOGUN_WORMHOLE)}
-            >
-              Wormhole
-            </button>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(ZEN_PATHS.SHOGUN_INDEX)}
-            >
-              Index
-            </button>
-            <button
-              className="btn btn-xs btn-outline"
-              onClick={() => setCurrentPath(ZEN_PATHS.ANNAS_ARCHIVE)}
-            >
-              Anna's Archive
-            </button>
-          </div>
+          {/* No Quick Paths preset */}
         </div>
       </div>
 
@@ -283,6 +252,12 @@ function GraphExplorer() {
           ) : error ? (
             <div className="alert alert-error">
               <span>{error}</span>
+            </div>
+          ) : !currentPath ? (
+            <div className="text-center p-8 text-base-content/50 flex flex-col gap-2 items-center justify-center">
+              <span className="text-4xl">🔍</span>
+              <p className="font-medium text-lg">Enter a ZenDB node path in the search box above to start exploring</p>
+              <p className="text-sm opacity-75">For example: shogun, shogun/network/relays, or any custom path.</p>
             </div>
           ) : !data || Object.keys(data).length === 0 ? (
             <div className="text-center p-8 text-base-content/50">

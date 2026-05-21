@@ -259,6 +259,16 @@ async function initializeServer() {
     try {
       const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
       const data = await response.json();
+
+      if (data && Array.isArray(data.peers)) {
+        data.peers = data.peers.map((peer: string) => {
+          if (typeof peer === "string" && peer.endsWith(":")) {
+            return peer.slice(0, -1);
+          }
+          return peer;
+        });
+      }
+
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
         "Access-Control-Allow-Origin": "*",
@@ -277,7 +287,18 @@ async function initializeServer() {
     try {
       const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
       const data = await response.json();
-      res.status(200).json(data.peers || []);
+      
+      let peers = data.peers || [];
+      if (Array.isArray(peers)) {
+        peers = peers.map((peer: string) => {
+          if (typeof peer === "string" && peer.endsWith(":")) {
+            return peer.slice(0, -1);
+          }
+          return peer;
+        });
+      }
+
+      res.status(200).json(peers);
     } catch (e) {
       res.status(200).json([]);
     }
