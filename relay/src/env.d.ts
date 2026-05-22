@@ -37,8 +37,6 @@ declare namespace NodeJS {
 
     // Advanced Options
     DATA_DIR?: string;
-    RELAY_PRIVATE_KEY?: string;
-    PRIVATE_KEY?: string;
     RELAY_QR?: string;
     RELAY_STORE?: string;
     RELAY_PATH?: string;

@@ -53,8 +53,6 @@ export const RESTART_REQUIRED_KEYS = [
   // Keys
   "RELAY_SEA_KEYPAIR",
   "RELAY_SEA_KEYPAIR_PATH",
-  "RELAY_PRIVATE_KEY",
-  "PRIVATE_KEY",
 
   // Module Enable Flags
   "IPFS_ENABLED",

@@ -110,11 +110,9 @@ export const config = {
     storageWarningThreshold: parseFloat(process.env.RELAY_STORAGE_WARNING_THRESHOLD || "80") || 80,
   },
 
-  // Relay SEA Keypair Configuration
   relayKeys: {
     seaKeypair: process.env.RELAY_SEA_KEYPAIR,
     seaKeypairPath: process.env.RELAY_SEA_KEYPAIR_PATH,
-    privateKey: process.env.RELAY_PRIVATE_KEY || process.env.PRIVATE_KEY,
   },
 
   // ============================================================================

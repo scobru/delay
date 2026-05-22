@@ -61,10 +61,6 @@ services:
       - IPFS_API_TOKEN=shogun2025
       - IPFS_API_KEY=shogun2025
       # - HOLSTER_RELAY_STORAGE_PATH=/app/relay/holster-data removed
-      # ============================================================================
-      # BLOCKCHAIN/WALLET (shared key for on-chain operations)
-      # ============================================================================
-      - RELAY_PRIVATE_KEY=0x_your_private_key_here
 
       # ============================================================================
       # STORAGE LIMITS
