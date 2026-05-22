@@ -105,19 +105,9 @@ export const config = {
 
   storage: {
     dataDir: process.env.DATA_DIR || path.join(process.cwd(), "data"),
-    storageType: (process.env.STORAGE_TYPE || "sqlite").toLowerCase() as "sqlite" | "radisk" | "s3",
     disableRadisk: process.env.DISABLE_RADISK === "true",
     maxStorageGB: parseFloat(process.env.RELAY_MAX_STORAGE_GB || "0") || 0,
     storageWarningThreshold: parseFloat(process.env.RELAY_STORAGE_WARNING_THRESHOLD || "80") || 80,
-
-    // S3/MinIO configuration for Gun storage (only used when storageType is "s3")
-    s3: {
-      endpoint: process.env.GUN_S3_ENDPOINT || process.env.MINIO_ENDPOINT,
-      accessKeyId: process.env.GUN_S3_ACCESS_KEY || process.env.MINIO_ACCESS_KEY,
-      secretAccessKey: process.env.GUN_S3_SECRET_KEY || process.env.MINIO_SECRET_KEY,
-      bucket: process.env.GUN_S3_BUCKET || "shogun-gun-data",
-      region: process.env.GUN_S3_REGION || process.env.MINIO_REGION || "us-east-1",
-    },
   },
 
   // Relay SEA Keypair Configuration

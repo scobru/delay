@@ -74,7 +74,6 @@ Create a `.env` file with essential variables:
 | `ADMIN_PASSWORD` | Admin token for all routes | _(required)_            |
 | `IPFS_API_URL`   | IPFS API endpoint          | `http://127.0.0.1:5001` |
 | `RELAY_PORT`     | HTTP port                  | `8765`                  |
-| `STORAGE_TYPE`   | `sqlite` or `radisk`       | `sqlite`                |
 
 See **[Environment Variables](./docs/ENVIRONMENT_VARIABLES.md)** for complete reference.
 

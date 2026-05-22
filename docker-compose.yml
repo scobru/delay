@@ -12,7 +12,7 @@ services:
     volumes:
       # Persist IPFS data (repository, pins, blocks)
       - ipfs-data:/data/ipfs
-      # Persist GunDB data (SQLite DB or radata files)
+      # Persist GunDB data (radata files)
       - relay-data:/app/relay/data
       # Persist ZEN sync engine data
       - zen-data:/app/relay/data/zendata
@@ -130,7 +130,7 @@ volumes:
   # IPFS repository - contains all IPFS data (blocks, pins, config)
   ipfs-data:
     driver: local
-  # GunDB data - contains gun.db (SQLite) or radata/ directory
+  # GunDB data - contains radata/ directory
   # This is critical for preserving subscription data, reputation, and all GunDB state
   relay-data:
     driver: local

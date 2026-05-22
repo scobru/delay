@@ -67,7 +67,6 @@ export const RESTART_REQUIRED_KEYS = [
 
   // Storage
   "DATA_DIR",
-  "STORAGE_TYPE",
   "DISABLE_RADISK",
 ] as const;
 

@@ -55,7 +55,6 @@ function createLogger(moduleName: string): pino.Logger {
 export const loggers = {
   server: createLogger("server"),
   ipfs: createLogger("ipfs-client"),
-  sqlite: createLogger("sqlite-store"),
   bullet: createLogger("bullet-catcher"),
   uploads: createLogger("uploads"),
   visualGraph: createLogger("visual-graph"),

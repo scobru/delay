@@ -8,10 +8,3 @@ declare module "ip" {
   export function address(): string;
 }
 
-// SQLite store type
-declare module "gun/lib/sqlite-store" {
-  class SQLiteStore {
-    constructor(options: { dbPath: string; file: string });
-  }
-  export default SQLiteStore;
-}
