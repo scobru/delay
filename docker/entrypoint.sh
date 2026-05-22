@@ -99,14 +99,17 @@ if [ -z "$RELAY_SEA_KEYPAIR" ] && [ ! -f "$KEYPAIR_FILE" ]; then
         chown node:node "$KEYPAIR_FILE" && \
         chmod 600 "$KEYPAIR_FILE"
     else
-        # Fallback: generate inline with Node.js
-        echo "⚠️  Standalone script not found, using inline generation..."
-        node -e "
-            const Gun = require('gun');
-            require('gun/sea');
-            Gun.SEA.pair().then(pair => {
-                require('fs').writeFileSync('$KEYPAIR_FILE', JSON.stringify(pair, null, 2));
+        # Fallback: generate inline with Node.js using Zen
+        echo "⚠️  Standalone script not found, using inline Zen generation..."
+        node --input-type=module -e "
+            import ZEN from 'zen';
+            import fs from 'fs';
+            ZEN.pair().then(pair => {
+                fs.writeFileSync('$KEYPAIR_FILE', JSON.stringify(pair, null, 2));
                 console.log('✅ SEA keypair generated at $KEYPAIR_FILE');
+            }).catch(err => {
+                console.error('❌ Failed to generate keypair:', err);
+                process.exit(1);
             });
         " && chown node:node "$KEYPAIR_FILE" && chmod 600 "$KEYPAIR_FILE"
     fi
