@@ -23,13 +23,9 @@ export const config = {
   server: {
     host: process.env.RELAY_HOST || ip.address(),
     port: (() => {
-      const port = parseInt(process.env.RELAY_PORT || process.env.PORT || "8421");
+      const port = parseInt(process.env.RELAY_PORT || process.env.PORT || "8420");
       if (isNaN(port) || port <= 0 || port >= 65536) {
-        return 8421;
-      }
-      if (port === 8420) {
-        console.warn("⚠️  Port 8420 is reserved for internal ZEN service. Falling back to 8421.");
-        return 8421;
+        return 8420;
       }
       return port;
     })(),
@@ -58,9 +54,7 @@ export const config = {
           .filter((p) => p.length > 0);
       }
       // Default public Gun peers
-      return [
-        "http://localhost:8420/zen"
-      ];
+      return [];
     })(),
   },
 

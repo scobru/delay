@@ -9,6 +9,12 @@ import { fileURLToPath } from "url";
 // @ts-ignore
 import ZEN from "zen";
 import "zen/lib/multicast.js";
+// @ts-ignore
+import { setupRelayPex } from "zen/lib/pex.js";
+// @ts-ignore
+import { PeerRegistry } from "zen/lib/peer-registry.js";
+// @ts-ignore
+import { buildStatus, signStatus } from "zen/lib/status.js";
 
 import multer from "multer";
 import { loggers } from "./utils/logger";
@@ -79,6 +85,29 @@ async function initializeServer() {
   console.log(welcomeMessage);
   loggers.server.info("🚀 Initializing Delay Server...");
   loggers.server.info("🚀 Delay v1.0.1 - FORCE UPDATE");
+
+  // Initialize Relay Identity early so routes and PEX can access it
+  if (relayKeysConfig.seaKeypair) {
+    try {
+      relayKeyPair = JSON.parse(relayKeysConfig.seaKeypair);
+      loggers.server.info("🔑 Relay KeyPair loaded from config");
+    } catch (e: any) {
+      loggers.server.error({ err: e.message }, "❌ Failed to parse RELAY_SEA_KEYPAIR");
+    }
+  }
+
+  if (!relayKeyPair) {
+    loggers.server.warn("⚠️ No Relay KeyPair configured, generating ephemeral pair");
+    relayKeyPair = await ZEN.pair();
+  }
+
+  // Initialize Peer Registry and load Bootstrap peers early
+  const peersPath = path.join(storageConfig.dataDir, "peers.json");
+  const registry = new PeerRegistry().bindSave(peersPath);
+  registry.protect(relayConfig.peers);
+
+  let cachedStatus = "";
+  let discResult: any = null;
 
   /**
    * System logging function (console only)
@@ -206,97 +235,57 @@ async function initializeServer() {
     next();
   });
 
-  // --- Zen HTTP Direct Routes (replaces legacy root-level http-proxy-middleware context filtering) ---
-  app.get(["/status", "/zen/status"], async (req, res) => {
-    try {
-      const response = await fetch("http://127.0.0.1:8420/status");
-      const data = await response.text();
-      res.writeHead(200, {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
-      });
-      res.end(data);
-    } catch (e: any) {
-      loggers.server.warn({ err: e.message }, "⚠️ Zen /status not reachable");
-      res.writeHead(503, { "Content-Type": "text/plain" });
-      res.end("");
-    }
+  // --- Native Zen Route Handlers ---
+  app.get(["/status", "/zen/status"], (req, res) => {
+    res.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end(cachedStatus || "");
   });
 
-  app.get("/.well-known/peers.json", async (req, res) => {
-    try {
-      const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
-      const data = await response.json();
-
-      if (data && Array.isArray(data.peers)) {
-        data.peers = data.peers.map((peer: string) => {
-          if (typeof peer === "string" && peer.endsWith(":")) {
-            return peer.slice(0, -1);
-          }
-          return peer;
-        });
-      }
-
-      res.writeHead(200, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "max-age=60",
-      });
-      res.end(JSON.stringify(data));
-    } catch (e: any) {
-      loggers.server.warn({ err: e.message }, "⚠️ Zen /.well-known/peers.json not reachable");
-      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-      res.end(JSON.stringify({ peers: [] }));
-    }
-  });
-
-  // Return the resolved peers list directly to keep compatibility
-  app.get("/peers", async (req, res) => {
-    try {
-      const response = await fetch("http://127.0.0.1:8420/.well-known/peers.json");
-      const data = await response.json();
-      
-      let peers = data.peers || [];
-      if (Array.isArray(peers)) {
-        peers = peers.map((peer: string) => {
-          if (typeof peer === "string" && peer.endsWith(":")) {
-            return peer.slice(0, -1);
-          }
-          return peer;
-        });
-      }
-
-      res.status(200).json(peers);
-    } catch (e) {
-      res.status(200).json([]);
-    }
-  });
-
-  // Proxy websocket/HTTP requests on /zen to http://127.0.0.1:8420/zen
-  const zenProxy = createProxyMiddleware({
-    target: "http://127.0.0.1:8420",
-    changeOrigin: true,
-    ws: true,
-    // @ts-ignore
-    on: {
-      error: (err: any, req: any, res: any) => {
-        // If Zen service is not reachable, return empty fallback instead of crashing
-        loggers.server.warn({ err: err.message }, "⚠️ Zen service on :8420 not reachable");
-        if (res && !res.headersSent) {
-          const url: string = req.url || "";
-          if (url.includes("peers.json")) {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ peers: [] }));
-          } else {
-            res.writeHead(503, { "Content-Type": "text/plain" });
-            res.end("");
-          }
+  app.get("/.well-known/peers.json", (req, res) => {
+    const entries = [
+      ...registry.bootEntries(),
+      ...registry.confirmedNonBoot(),
+    ];
+    const peers = entries
+      .map(e => {
+        try {
+          const u = new URL(e.url);
+          return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "80"));
+        } catch {
+          return null;
         }
-      },
-    },
+      })
+      .filter((v, i, a) => v && a.indexOf(v) === i); // unique, non-null
+
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "max-age=60",
+    });
+    res.end(JSON.stringify({ peers }));
   });
 
-  app.use("/zen", zenProxy);
+  app.get("/peers", (req, res) => {
+    const entries = [
+      ...registry.bootEntries(),
+      ...registry.confirmedNonBoot(),
+    ];
+    const peers = entries
+      .map(e => {
+        try {
+          const u = new URL(e.url);
+          return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "80"));
+        } catch {
+          return null;
+        }
+      })
+      .filter((v, i, a) => v && a.indexOf(v) === i); // unique, non-null
+    
+    res.status(200).json(peers);
+  });
 
   // ===== SECURITY: Security Headers =====
   app.use((req, res, next) => {
@@ -489,17 +478,7 @@ async function initializeServer() {
   // Avvia il server
   const server = await startServer();
 
-  // Handle WebSocket upgrade proxying to standalone Zen service
-  server.on("upgrade", (req: any, socket: any, head: any) => {
-    if (req.url?.startsWith("/zen")) {
-      // Patch raw socket to track stats for dashboard
-      const addr = req.headers['x-forwarded-for'] || req.socket.remoteAddress || "unknown";
-      statsTracker.patchRawSocket(socket, addr as string, "zen");
-      
-      // @ts-ignore
-      zenProxy.upgrade(req, socket, head);
-    }
-  });
+  // Note: Native embedded ZEN manages WebSocket upgrades on /zen automatically.
 
   const peers = relayConfig.peers;
   loggers.server.info({ peers }, "🔍 Peers");
@@ -507,18 +486,110 @@ async function initializeServer() {
   // Storage is handled out-of-process by the standalone Zen service on 8420.
   // We act as a client connecting to it.
 
-  // Configure ZEN options as a lightweight client
+  // Resolve domain for PEX
+  let domain: string | null = null;
+  if (host && host !== "localhost" && !/^\d+\.\d+\.\d+\.\d+$/.test(host) && !host.includes(":")) {
+    domain = host;
+  }
+
+  // Configure ZEN options for native server embedding
   const zenOptions: any = {
-    super: false, // Act as client
+    web: server,
+    peers: relayConfig.peers,
+    file: zenConfig.dataDir,
     localStorage: false,
-    radisk: true, // Standalone service handles database persistence!
-    axe: true,    // Standalone service handles AXE!
-    peers: ["http://127.0.0.1:8420/zen"], // Connect to local Zen relay (e.g. http://localhost:8420/zen)
+    radisk: true,
+    axe: true,
+    ...(relayKeyPair && { pub: relayKeyPair.pub, pid: relayKeyPair.pub })
   };
 
-  loggers.server.info({ peers: zenOptions.peers }, "🚀 Initializing ZEN Client Instance...");
+  loggers.server.info({ peers: zenOptions.peers }, "🚀 Initializing Embedded ZEN Server Instance...");
 
   const zen = new ZEN(zenOptions);
+
+  // Wire up Peer Exchange (PEX)
+  function rttOf(url: string) {
+    const n = PeerRegistry.norm(url);
+    const at = zen && zen._graph && zen._graph._;
+    const axeUp = (at && at.axe && at.axe.up) || {};
+    for (const [, p] of Object.entries(axeUp)) {
+      // @ts-ignore
+      if (p && PeerRegistry.norm(p.url) === n && p.rtt > 0) return p.rtt;
+    }
+    return Infinity;
+  }
+
+  function dedupeByDomain(urls: string[]) {
+    const domainPorts = new Set<string>();
+    urls.forEach(u => {
+      try {
+        const h = new URL(u).hostname;
+        if (!/^\[/.test(h) && !/^\d+\.\d+\.\d+\.\d+$/.test(h)) {
+          domainPorts.add(new URL(u).port);
+        }
+      } catch {}
+    });
+    if (!domainPorts.size) return urls;
+    return urls.filter(u => {
+      try {
+        const parsed = new URL(u);
+        if (domainPorts.has(parsed.port)) {
+          if (/^\[/.test(parsed.hostname)) return false;
+          if (/^\d+\.\d+\.\d+\.\d+$/.test(parsed.hostname)) return false;
+        }
+      } catch {}
+      return true;
+    });
+  }
+
+  async function refreshStatus() {
+    if (!relayKeyPair) return;
+    try {
+      const list = registry.pexList(50, rttOf).filter((u: string) => u.endsWith("/zen"));
+      const dedupedList = dedupeByDomain(list).sort((a, b) => rttOf(a) - rttOf(b));
+      
+      const payload = buildStatus({
+        pub: relayKeyPair.pub,
+        domain: domain,
+        ip4: discResult ? (discResult.ip || null) : null,
+        ip6: discResult ? (discResult.ip6 || null) : null,
+        port: port,
+        peers: dedupedList,
+        mcp: false,
+      });
+      cachedStatus = await signStatus(payload, relayKeyPair);
+    } catch (e: any) {
+      loggers.server.warn({ err: e.message }, "⚠️ Error refreshing signed status");
+    }
+    registry.evict();
+  }
+
+  const { adopt } = setupRelayPex(zen, {
+    domain: domain,
+    port: port,
+    registry: registry,
+    onDisc: (di: any) => {
+      discResult = di;
+      refreshStatus();
+    },
+    onAdopt: (url: string) => {
+      refreshStatus();
+    }
+  });
+
+  // Re-run refreshStatus every 30 seconds to keep peers and timestamps fresh
+  const statusTimer = setInterval(refreshStatus, 30000);
+  if (statusTimer.unref) statusTimer.unref();
+
+  // Load previously discovered peers from disk in a non-blocking setImmediate
+  setImmediate(() => {
+    try {
+      const count = registry.load(adopt);
+      loggers.server.info(`Loaded ${count} persisted peers from disk`);
+    } catch (e: any) {
+      loggers.server.warn({ err: e.message }, "⚠️ Failed to load persisted peers");
+    }
+  });
 
   // Initialize Gun Alias Guard (running over Zen instance natively)
   gunAliasGuard(zen);
@@ -528,7 +599,7 @@ async function initializeServer() {
 
   (global as any).zenInstance = zen;
 
-  loggers.server.info("✅ ZEN Client Instance successfully initialized");
+  loggers.server.info("✅ Embedded ZEN Server Instance successfully initialized");
 
   // Initialize connection counters
   let totalConnections = 0;
@@ -568,45 +639,6 @@ async function initializeServer() {
 
 
 
-
-  // Get relay host identifier
-  // Extract hostname from endpoint if it's a URL
-  let host = serverConfig.host || relayConfig.endpoint || "localhost";
-  try {
-    // If it's a URL, extract just the hostname
-    if (host.includes("://") || host.includes(".")) {
-      const url = new URL(host.startsWith("http") ? host : `https://${host}`);
-      host = url.hostname;
-    }
-  } catch (e) {
-    // Not a valid URL, use as-is
-  }
-
-  // Initialize Generic Services (Linda functionality)
-  // DISABLED: Services removed as client migrated to pure Zen
-  /*
-    try {
-      const { initServices } = await import("./services/manager");
-      await initServices(app, server, gun);
-    } catch (error) {
-      loggers.server.error({ err: error }, "Failed to load Generic Services");
-    }
-    */
-
-  // Initialize Relay Identity
-  if (relayKeysConfig.seaKeypair) {
-    try {
-      relayKeyPair = JSON.parse(relayKeysConfig.seaKeypair);
-      loggers.server.info("🔑 Relay KeyPair loaded from config");
-    } catch (e: any) {
-      loggers.server.error({ err: e.message }, "❌ Failed to parse RELAY_SEA_KEYPAIR");
-    }
-  }
-
-  if (!relayKeyPair) {
-    loggers.server.warn("⚠️ No Relay KeyPair configured, generating ephemeral pair");
-    relayKeyPair = await ZEN.pair();
-  }
 
   app.set("relayUserPub", relayKeyPair.pub);
   app.set("relayKeyPair", relayKeyPair); // Make relay keypair available to routes

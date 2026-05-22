@@ -8,6 +8,18 @@
 		},
 		{
 			"path": "../llm-wiki"
+		},
+		{
+			"path": "C:/Users/scobr/.antigravity"
+		},
+		{
+			"path": "C:/Users/scobr/.antigravitycli"
+		},
+		{
+			"path": "C:/Users/scobr/.antigravity-ide"
+		},
+		{
+			"path": "C:/Users/scobr/.gemini"
 		}
 	],
 	"settings": {}

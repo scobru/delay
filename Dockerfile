@@ -299,12 +299,12 @@ RUN echo "🔍 Final dashboard verification..." && \
     echo "✅ Dashboard files verified and readable"
 
 # Expose ports
-# 8765 = Relay server, 5001 = IPFS API, 8080 = IPFS Gateway, 4001 = IPFS Swarm
-EXPOSE 8765 5001 8080 4001
+# 8420 = Relay server, 5001 = IPFS API, 8080 = IPFS Gateway, 4001 = IPFS Swarm
+EXPOSE 8420 5001 8080 4001
 
-# Health check (dynamically uses RELAY_PORT or PORT, falls back to 8765)
+# Health check (dynamically uses RELAY_PORT or PORT, falls back to 8420)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=180s --retries=5 \
-    CMD curl -f http://127.0.0.1:${RELAY_PORT:-${PORT:-8765}}/health || exit 1
+    CMD curl -f http://127.0.0.1:${RELAY_PORT:-${PORT:-8420}}/health || exit 1
 
 # Use supervisor to manage multiple services
 RUN mkdir -p /etc/supervisor/conf.d

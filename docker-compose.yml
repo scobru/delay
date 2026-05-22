@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: delay-stack
     ports:
-      - "8765:8765" # Relay Server
+      - "8420:8420" # Relay Server
       - "5001:5001" # IPFS API
       - "8080:8080" # IPFS Gateway
       - "4001:4001" # IPFS Swarm
@@ -28,7 +28,7 @@ services:
       - NODE_ENV=production
       - NODE_OPTIONS=--max-old-space-size=4096 --expose-gc
       - RELAY_HOST=localhost
-      - RELAY_PORT=8765
+      - RELAY_PORT=8420
       - RELAY_NAME=delay
       - RELAY_PATH=public
       - RELAY_STORE=true
@@ -113,7 +113,7 @@ services:
 
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8420/health"]
       interval: 30s
       timeout: 30s
       retries: 5
