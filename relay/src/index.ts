@@ -253,7 +253,7 @@ async function initializeServer() {
       .map(e => {
         try {
           const u = new URL(e.url);
-          return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "80"));
+          return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "8420"));
         } catch {
           return null;
         }
@@ -277,7 +277,7 @@ async function initializeServer() {
       .map(e => {
         try {
           const u = new URL(e.url);
-          return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "80"));
+          return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "8420"));
         } catch {
           return null;
         }
@@ -571,9 +571,24 @@ async function initializeServer() {
   const { adopt } = setupRelayPex(zen, {
     domain: domain,
     port: port,
+    publicPort: serverConfig.publicPort,
     registry: registry,
     rttOf: rttOf,
     pexMax: 50,
+    sendPeers: (list: string[], peer: any) => {
+      const r = zen._graph._;
+      const bpids = Object.values((r && r.opt && r.opt.peers) || {})
+        .filter((p: any) => p && p.pid && !p.url && p.pid !== peer.pid)
+        .map((p: any) => p.pid);
+      const msg: any = { dam: "pex", peers: list };
+      if (bpids.length) msg.bpids = bpids;
+      try {
+        const mesh = r.opt && r.opt.mesh;
+        if (mesh) {
+          mesh.say(msg, peer);
+        }
+      } catch {}
+    },
     onDisc: (di: any) => {
       discResult = di;
       refreshStatus();
@@ -582,6 +597,8 @@ async function initializeServer() {
       refreshStatus();
     }
   });
+
+  refreshStatus(); // Initialize cache on cold start (so status is not empty)
 
   // Re-run refreshStatus every 30 seconds to keep peers and timestamps fresh
   const statusTimer = setInterval(refreshStatus, 30000);
@@ -622,6 +639,16 @@ async function initializeServer() {
     const mesh = root.opt && root.opt.mesh;
     if (!mesh) return;
     const route = mesh;
+
+    // Wrap mesh.hear["?"] to store pub/pid for WATCHDOG
+    const _origHearQ = mesh.hear["?"];
+    mesh.hear["?"] = function (this: any, msg: any, peer: any) {
+      if (typeof _origHearQ === "function") _origHearQ.call(this, msg, peer);
+      if (peer && peer.url) {
+        const nu = PeerRegistry.norm(peer.url);
+        registry.confirm(nu, { pub: peer.pub || "", pid: peer.pid || "" });
+      }
+    };
 
     // 2. Connect to BOOT peers immediately
     const peersList = relayConfig.peers;

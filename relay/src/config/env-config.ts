@@ -29,6 +29,13 @@ export const config = {
       }
       return port;
     })(),
+    publicPort: (() => {
+      const port = parseInt(process.env.PUBLIC_PORT || "");
+      if (isNaN(port) || port <= 0 || port >= 65536) {
+        return null;
+      }
+      return port;
+    })(),
     publicPath: process.env.RELAY_PATH || "public",
     nodeEnv: process.env.NODE_ENV || "development",
     welcomeMessage:
