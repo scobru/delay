@@ -283,7 +283,7 @@ async function initializeServer() {
         }
       })
       .filter((v, i, a) => v && a.indexOf(v) === i); // unique, non-null
-    
+
     res.status(200).json(peers);
   });
 
@@ -500,7 +500,11 @@ async function initializeServer() {
     localStorage: false,
     radisk: true,
     axe: true,
-    ...(relayKeyPair && { pub: relayKeyPair.pub, pid: relayKeyPair.pub })
+    ...(relayKeyPair && { pub: relayKeyPair.pub, pid: relayKeyPair.pub }),
+    // Storage resilience options mapping
+    ...(process.env.FMB !== undefined && { fmb: parseInt(process.env.FMB) }),
+    ...(process.env.FRAT !== undefined && { frat: parseFloat(process.env.FRAT) }),
+    ...(process.env.EVICT !== undefined && { evict: process.env.EVICT !== '0' })
   };
 
   loggers.server.info({ peers: zenOptions.peers }, "🚀 Initializing Embedded ZEN Server Instance...");
@@ -527,7 +531,7 @@ async function initializeServer() {
         if (!/^\[/.test(h) && !/^\d+\.\d+\.\d+\.\d+$/.test(h)) {
           domainPorts.add(new URL(u).port);
         }
-      } catch {}
+      } catch { }
     });
     if (!domainPorts.size) return urls;
     return urls.filter(u => {
@@ -537,7 +541,7 @@ async function initializeServer() {
           if (/^\[/.test(parsed.hostname)) return false;
           if (/^\d+\.\d+\.\d+\.\d+$/.test(parsed.hostname)) return false;
         }
-      } catch {}
+      } catch { }
       return true;
     });
   }
@@ -547,7 +551,7 @@ async function initializeServer() {
     try {
       const list = registry.pexList(50, rttOf).filter((u: string) => u.endsWith("/zen"));
       const dedupedList = dedupeByDomain(list).sort((a, b) => rttOf(a) - rttOf(b));
-      
+
       const payload = buildStatus({
         pub: relayKeyPair.pub,
         domain: domain,
@@ -568,6 +572,8 @@ async function initializeServer() {
     domain: domain,
     port: port,
     registry: registry,
+    rttOf: rttOf,
+    pexMax: 50,
     onDisc: (di: any) => {
       discResult = di;
       refreshStatus();
@@ -581,14 +587,157 @@ async function initializeServer() {
   const statusTimer = setInterval(refreshStatus, 30000);
   if (statusTimer.unref) statusTimer.unref();
 
-  // Load previously discovered peers from disk in a non-blocking setImmediate
+  // Single access point for axe.up (inbound relay connections keyed by PID).
+  function getAxeUp() {
+    const at = zen && zen._graph && zen._graph._;
+    return (at && at.axe && at.axe.up) || {};
+  }
+
+  // Returns true when a registry entry has at least one live wire.
+  function isPeerAlive(entry: any, opt: any) {
+    const { pub: knownPub, pid: knownPid, url } = entry;
+    if (knownPub || knownPid) {
+      const axeUp = getAxeUp();
+      return (knownPub && (
+        Object.values(opt && opt.peers || {}).some((p: any) => p && p.wire && p.pub === knownPub) ||
+        Object.values(axeUp).some((p: any) => p && p.wire && p.pub === knownPub)
+      )) ||
+        !!(knownPid && axeUp[knownPid] && axeUp[knownPid].wire);
+    }
+    const p = opt && opt.peers && opt.peers[url];
+    return !!(p && p.wire);
+  }
+
+  // Load previously discovered peers and initialize network events in setImmediate
   setImmediate(() => {
+    // 1. Load previously discovered peers from disk
     try {
       const count = registry.load(adopt);
       loggers.server.info(`Loaded ${count} persisted peers from disk`);
     } catch (e: any) {
       loggers.server.warn({ err: e.message }, "⚠️ Failed to load persisted peers");
     }
+
+    const root = zen._graph._;
+    const mesh = root.opt && root.opt.mesh;
+    if (!mesh) return;
+    const route = mesh;
+
+    // 2. Connect to BOOT peers immediately
+    const peersList = relayConfig.peers;
+    const _initOpt = root.opt;
+    peersList.forEach((url: string) => {
+      const normUrl = PeerRegistry.norm(url);
+      const existing = _initOpt && _initOpt.peers && _initOpt.peers[normUrl];
+      if (existing && existing.wire) return; // already wired
+      const peerObj = existing || { id: normUrl, url: normUrl, retry: 9 };
+      peerObj._isBoot = true; // prevent AXE hiGuess/axeGuess tombstoning for BOOT peers
+      if (existing) existing.retry = 9;
+      try { route.hi(peerObj); } catch { }
+      // Ensure the stored peer object is also marked
+      const stored = _initOpt && _initOpt.peers && _initOpt.peers[normUrl];
+      if (stored) stored._isBoot = true;
+    });
+
+    // 3. Confirm inbound BOOT/PEX peer connections when they announce their URL via dam:"opt".
+    const _origHearOpt = mesh.hear["opt"];
+    mesh.hear["opt"] = function (this: any, msg: any, peer: any) {
+      if (typeof _origHearOpt === "function") _origHearOpt.call(this, msg, peer);
+      if (!msg.ok && msg.opt && typeof msg.opt.peers === "string" && peer && !peer.url && peer.pid) {
+        const ann = PeerRegistry.norm(msg.opt.peers);
+        if (ann && !registry.isSelf(ann)) {
+          registry.confirm(ann, { pub: peer.pub || "", pid: peer.pid });
+        }
+      }
+    };
+
+    // 4. Confirm inbound peers that self-announce their URL via dam:"pex".
+    const _origHearPex = mesh.hear["pex"];
+    mesh.hear["pex"] = function (this: any, msg: any, peer: any) {
+      if (typeof _origHearPex === "function") _origHearPex.call(this, msg, peer);
+      if (peer && peer.pid && !peer.url && Array.isArray(msg.peers)) {
+        for (const u of msg.peers) {
+          if (typeof u !== "string") continue;
+          const ann = PeerRegistry.norm(u);
+          if (ann && !registry.isSelf(ann)) {
+            registry.confirm(ann, { pub: peer.pub || "", pid: peer.pid });
+          }
+        }
+      }
+    };
+
+    // 5. On new peer connection: mark URL as confirmed + announce new browser PIDs for WebRTC
+    root.on("hi", function (this: any, peer: any) {
+      this.to.next(peer);
+      if (peer.url) {
+        const nu = PeerRegistry.norm(peer.url);
+        registry.confirm(nu, { pub: peer.pub || "", pid: peer.pid || "" });
+      }
+      if (peer.pid && !peer.url) {
+        setTimeout(() => {
+          try {
+            Object.values(root.opt.peers || {}).forEach((p: any) => {
+              if (p && p.wire && p !== peer) {
+                try { route.say({ dam: "pex", peers: [], bpids: [peer.pid] }, p); } catch { }
+              }
+            });
+          } catch { }
+        }, 600);
+      }
+    });
+
+    // 6. Reconnect watchdog for BOOT and non-BOOT PEX peers
+    const MUPS = 10;
+    const watchdogTimer = setInterval(() => {
+      const opt = root.opt;
+      if (!route || !opt) return;
+
+      for (const entry of registry.bootEntries()) {
+        const norm = entry.url;
+        if (isPeerAlive(entry, opt)) continue;
+        if (opt._tombUrls) {
+          opt._tombUrls.delete(norm);
+          opt._tombUrls.delete(PeerRegistry.alt(norm));
+        }
+        const p = opt.peers[norm];
+        if (p) { delete p._noReconnect; delete p._hiGuess; delete p._axeGuess; p._isBoot = true; }
+        loggers.server.info(`[BOOT-WATCHDOG] Reconnecting lost BOOT peer: ${norm}`);
+        try { route.hi({ id: norm, url: norm, retry: 9 }); } catch { }
+        const rp = opt.peers && opt.peers[norm];
+        if (rp) rp._isBoot = true;
+      }
+
+      const ups = Object.keys(getAxeUp()).length;
+      for (const entry of registry.confirmedNonBoot()) {
+        const url = entry.url;
+        if (isPeerAlive(entry, opt)) {
+          registry.touch(url);
+          continue;
+        }
+        if (ups >= MUPS) continue;
+        const tombs = opt._tombUrls;
+        const p = opt.peers && opt.peers[url];
+        if (tombs) {
+          tombs.delete(url);
+          tombs.delete(PeerRegistry.alt(url));
+        }
+        if (p) { delete p._noReconnect; delete p._hiGuess; delete p._axeGuess; }
+        try { route.hi({ id: url, url: url, retry: 3 }); } catch { }
+      }
+    }, 30000);
+    if (watchdogTimer.unref) watchdogTimer.unref();
+
+    // 7. Reactive rescan on bye (30s debounce)
+    let tbye: NodeJS.Timeout | null = null;
+    root.on("bye", function (this: any, peer: any) {
+      this.to.next.apply(this.to, arguments);
+      if (tbye) clearTimeout(tbye);
+      tbye = setTimeout(() => {
+        loggers.server.info("Peer disconnected — refreshing status");
+        refreshStatus();
+      }, 30000);
+      if (tbye.unref) tbye.unref();
+    });
   });
 
   // Initialize Gun Alias Guard (running over Zen instance natively)
