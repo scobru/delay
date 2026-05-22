@@ -69,6 +69,11 @@ ARG STRICT_SESSION_IP
 
 ARG LEGACY_RADATA_DIR
 
+# --- Zen Sync Engine ---
+ARG ZEN_ENABLED
+ARG ZEN_PATH
+ARG ZEN_DATA_DIR
+
 # =============================================================================
 # ENVIRONMENT VARIABLES (Persist ARGs to Runtime)
 # =============================================================================
@@ -126,7 +131,10 @@ ENV WORMHOLE_CLEANUP_ENABLED=${WORMHOLE_CLEANUP_ENABLED} \
     AUTO_REPLICATION=${AUTO_REPLICATION} \
     CORS_ORIGINS=${CORS_ORIGINS} \
     CORS_CREDENTIALS=${CORS_CREDENTIALS} \
-    STRICT_SESSION_IP=${STRICT_SESSION_IP}
+    STRICT_SESSION_IP=${STRICT_SESSION_IP} \
+    ZEN_ENABLED=${ZEN_ENABLED} \
+    ZEN_PATH=${ZEN_PATH} \
+    ZEN_DATA_DIR=${ZEN_DATA_DIR}
 
 
 
