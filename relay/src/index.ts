@@ -673,6 +673,11 @@ async function initializeServer() {
       if (!msg.ok && msg.opt && typeof msg.opt.peers === "string" && peer && !peer.url && peer.pid) {
         const ann = PeerRegistry.norm(msg.opt.peers);
         if (ann && !registry.isSelf(ann)) {
+          if (peer.pub === relayKeyPair?.pub || peer.pid === root.opt.pid) {
+            registry.setSelf(ann);
+            registry._map.delete(ann);
+            return;
+          }
           registry.confirm(ann, { pub: peer.pub || "", pid: peer.pid });
         }
       }
@@ -687,6 +692,11 @@ async function initializeServer() {
           if (typeof u !== "string") continue;
           const ann = PeerRegistry.norm(u);
           if (ann && !registry.isSelf(ann)) {
+            if (peer.pub === relayKeyPair?.pub || peer.pid === root.opt.pid) {
+              registry.setSelf(ann);
+              registry._map.delete(ann);
+              continue;
+            }
             registry.confirm(ann, { pub: peer.pub || "", pid: peer.pid });
           }
         }
@@ -698,6 +708,11 @@ async function initializeServer() {
       this.to.next(peer);
       if (peer.url) {
         const nu = PeerRegistry.norm(peer.url);
+        if (peer.pub === relayKeyPair?.pub || peer.pid === root.opt.pid) {
+          registry.setSelf(nu);
+          registry._map.delete(nu);
+          return;
+        }
         registry.confirm(nu, { pub: peer.pub || "", pid: peer.pid || "" });
       }
       if (peer.pid && !peer.url) {
