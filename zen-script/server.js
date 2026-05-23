@@ -367,7 +367,9 @@ if (main && cluster.isPrimary) {
         ...registry.confirmedNonBoot(),
       ];
       const peers = entries
-        .map(e => PeerRegistry.alt(e.url))
+        .map(e => {
+          try { const u = new URL(e.url); return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "8420")); } catch { return null; }
+        })
         .filter((v, i, a) => v && a.indexOf(v) === i); // unique, non-null
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
