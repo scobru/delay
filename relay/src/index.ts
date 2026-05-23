@@ -613,16 +613,42 @@ async function initializeServer() {
   // Returns true when a registry entry has at least one live wire.
   function isPeerAlive(entry: any, opt: any) {
     const { pub: knownPub, pid: knownPid, url } = entry;
-    if (knownPub || knownPid) {
-      const axeUp = getAxeUp();
-      return (knownPub && (
-        Object.values(opt && opt.peers || {}).some((p: any) => p && p.wire && p.pub === knownPub) ||
-        Object.values(axeUp).some((p: any) => p && p.wire && p.pub === knownPub)
-      )) ||
-        !!(knownPid && axeUp[knownPid] && axeUp[knownPid].wire);
+    const normUrl = PeerRegistry.norm(url);
+
+    const isWireActive = (p: any) => {
+      return !!(p && p.wire && (p.wire.readyState === undefined || p.wire.readyState === 1));
+    };
+
+    // 1. Check opt.peers (outbound connections)
+    if (opt && opt.peers) {
+      // Direct lookup by canonical URL
+      const directP = opt.peers[normUrl];
+      if (isWireActive(directP)) return true;
+
+      // Scan all peers in opt.peers
+      for (const p of Object.values(opt.peers) as any[]) {
+        if (isWireActive(p)) {
+          if (p.url && PeerRegistry.norm(p.url) === normUrl) return true;
+          if (p.id && PeerRegistry.norm(p.id) === normUrl) return true;
+          if (knownPid && p.pid === knownPid) return true;
+          if (knownPub && p.pub === knownPub) return true;
+        }
+      }
     }
-    const p = opt && opt.peers && opt.peers[url];
-    return !!(p && p.wire);
+
+    // 2. Check axeUp (inbound connections)
+    const axeUp = getAxeUp();
+    if (knownPid && axeUp[knownPid] && isWireActive(axeUp[knownPid])) return true;
+
+    for (const p of Object.values(axeUp) as any[]) {
+      if (isWireActive(p)) {
+        if (p.url && PeerRegistry.norm(p.url) === normUrl) return true;
+        if (p.id && PeerRegistry.norm(p.id) === normUrl) return true;
+        if (knownPub && p.pub === knownPub) return true;
+      }
+    }
+
+    return false;
   }
 
   // Load previously discovered peers and initialize network events in setImmediate

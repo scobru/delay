@@ -247,21 +247,42 @@ if (main && cluster.isPrimary) {
   }
 
   // Returns true when a registry entry has at least one live wire.
-  // Checks both opt.peers (outbound, keyed by URL) and axe.up (inbound, keyed
-  // by PID) so that inbound-only connections (after AXE conflict resolution)
-  // are correctly detected as alive — replacing 3 duplicate inline checks.
   function isPeerAlive(entry, opt) {
     const { pub: knownPub, pid: knownPid, url } = entry;
-    if (knownPub || knownPid) {
-      const axeUp = getAxeUp();
-      return (knownPub && (
-        Object.values(opt && opt.peers || {}).some(p => p && p.wire && p.pub === knownPub) ||
-        Object.values(axeUp).some(p => p && p.wire && p.pub === knownPub)
-      )) ||
-      !!(knownPid && axeUp[knownPid] && axeUp[knownPid].wire);
+    const normUrl = PeerRegistry.norm(url);
+
+    const isWireActive = (p) => {
+      return !!(p && p.wire && (p.wire.readyState === undefined || p.wire.readyState === 1));
+    };
+
+    // 1. Check opt.peers (outbound connections)
+    if (opt && opt.peers) {
+      const directP = opt.peers[normUrl];
+      if (isWireActive(directP)) return true;
+
+      for (const p of Object.values(opt.peers)) {
+        if (isWireActive(p)) {
+          if (p.url && PeerRegistry.norm(p.url) === normUrl) return true;
+          if (p.id && PeerRegistry.norm(p.id) === normUrl) return true;
+          if (knownPid && p.pid === knownPid) return true;
+          if (knownPub && p.pub === knownPub) return true;
+        }
+      }
     }
-    const p = opt && opt.peers && opt.peers[url];
-    return !!(p && p.wire);
+
+    // 2. Check axeUp (inbound connections)
+    const axeUp = getAxeUp();
+    if (knownPid && axeUp[knownPid] && isWireActive(axeUp[knownPid])) return true;
+
+    for (const p of Object.values(axeUp)) {
+      if (isWireActive(p)) {
+        if (p.url && PeerRegistry.norm(p.url) === normUrl) return true;
+        if (p.id && PeerRegistry.norm(p.id) === normUrl) return true;
+        if (knownPub && p.pub === knownPub) return true;
+      }
+    }
+
+    return false;
   }
 
   // ── /status signed endpoint (CORS-enabled, consumed by AXE and agents) ────
