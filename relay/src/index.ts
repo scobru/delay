@@ -250,14 +250,7 @@ async function initializeServer() {
       ...registry.confirmedNonBoot(),
     ];
     const peers = entries
-      .map(e => {
-        try {
-          const u = new URL(e.url);
-          return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "8420"));
-        } catch {
-          return null;
-        }
-      })
+      .map(e => PeerRegistry.alt(e.url))
       .filter((v, i, a) => v && a.indexOf(v) === i); // unique, non-null
 
     res.writeHead(200, {
@@ -274,14 +267,7 @@ async function initializeServer() {
       ...registry.confirmedNonBoot(),
     ];
     const peers = entries
-      .map(e => {
-        try {
-          const u = new URL(e.url);
-          return u.hostname + ":" + (u.port || (u.protocol === "https:" ? "443" : "8420"));
-        } catch {
-          return null;
-        }
-      })
+      .map(e => PeerRegistry.alt(e.url))
       .filter((v, i, a) => v && a.indexOf(v) === i); // unique, non-null
 
     res.status(200).json(peers);

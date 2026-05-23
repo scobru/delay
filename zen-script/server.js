@@ -362,16 +362,12 @@ if (main && cluster.isPrimary) {
       return;
     }
     if (req.method === "GET" && req.url === "/.well-known/peers.json") {
-      // Return known peers (BOOT + confirmed) as host:port for bootstrap discovery.
-      // Any ZEN relay exposes this so new relays/browsers can seed their peer list.
       const entries = [
         ...registry.bootEntries(),
         ...registry.confirmedNonBoot(),
       ];
       const peers = entries
-        .map(e => {
-          try { const u = new URL(e.url); return u.hostname + ":" + u.port; } catch { return null; }
-        })
+        .map(e => PeerRegistry.alt(e.url))
         .filter((v, i, a) => v && a.indexOf(v) === i); // unique, non-null
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
