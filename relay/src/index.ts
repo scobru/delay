@@ -90,9 +90,21 @@ async function initializeServer() {
   if (relayKeysConfig.seaKeypair) {
     try {
       relayKeyPair = JSON.parse(relayKeysConfig.seaKeypair);
-      loggers.server.info("🔑 Relay KeyPair loaded from config");
+      loggers.server.info("🔑 Relay KeyPair loaded from config (RELAY_SEA_KEYPAIR)");
     } catch (e: any) {
       loggers.server.error({ err: e.message }, "❌ Failed to parse RELAY_SEA_KEYPAIR");
+    }
+  } else if (relayKeysConfig.seaKeypairPath) {
+    try {
+      if (fs.existsSync(relayKeysConfig.seaKeypairPath)) {
+        const fileContent = fs.readFileSync(relayKeysConfig.seaKeypairPath, "utf8");
+        relayKeyPair = JSON.parse(fileContent);
+        loggers.server.info(`🔑 Relay KeyPair loaded from path: ${relayKeysConfig.seaKeypairPath}`);
+      } else {
+        loggers.server.warn(`⚠️ Relay KeyPair path configured but file not found: ${relayKeysConfig.seaKeypairPath}`);
+      }
+    } catch (e: any) {
+      loggers.server.error({ err: e.message }, `❌ Failed to load/parse KeyPair from path: ${relayKeysConfig.seaKeypairPath}`);
     }
   }
 
@@ -797,8 +809,8 @@ async function initializeServer() {
 
     // 7. Reactive rescan on bye (30s debounce)
     let tbye: NodeJS.Timeout | null = null;
-    root.on("bye", function (this: any, peer: any) {
-      this.to.next.apply(this.to, arguments);
+    root.on("bye", function (this: any, ...args: any[]) {
+      this.to.next(...args);
       if (tbye) clearTimeout(tbye);
       tbye = setTimeout(() => {
         loggers.server.info("Peer disconnected — refreshing status");
