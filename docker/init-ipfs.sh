@@ -167,8 +167,11 @@ if [ ! -f "$IPFS_PATH/config" ]; then
         "/ip4/0.0.0.0/udp/4001/quic",
         "/ip6/::/udp/4001/quic"
     ]' 2>/dev/null
-    /usr/local/bin/ipfs config --json Routing.AcceleratedDHTClient true 2>/dev/null
+    /usr/local/bin/ipfs config --json Routing.AcceleratedDHTClient false 2>/dev/null
     /usr/local/bin/ipfs config --json Routing.OptimisticProvide true 2>/dev/null
+    /usr/local/bin/ipfs config --json ConnMgr.HighWater 100 2>/dev/null
+    /usr/local/bin/ipfs config --json ConnMgr.LowWater 20 2>/dev/null
+    /usr/local/bin/ipfs config --json ConnMgr.GracePeriod '"1m"' 2>/dev/null
     /usr/local/bin/ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["*"]' 2>/dev/null
     /usr/local/bin/ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["PUT", "POST", "GET"]' 2>/dev/null
     /usr/local/bin/ipfs config --json API.HTTPHeaders.Access-Control-Allow-Headers '["Authorization"]' 2>/dev/null
@@ -261,6 +264,10 @@ else
         set +e  # Temporarily disable exit on error
         /usr/local/bin/ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001 2>/dev/null
         /usr/local/bin/ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080 2>/dev/null
+        /usr/local/bin/ipfs config --json Routing.AcceleratedDHTClient false 2>/dev/null
+        /usr/local/bin/ipfs config --json ConnMgr.HighWater 100 2>/dev/null
+        /usr/local/bin/ipfs config --json ConnMgr.LowWater 20 2>/dev/null
+        /usr/local/bin/ipfs config --json ConnMgr.GracePeriod '"1m"' 2>/dev/null
         set -e  # Re-enable exit on error
         
         # Update API authentication headers
