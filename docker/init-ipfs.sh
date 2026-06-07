@@ -168,14 +168,17 @@ if [ ! -f "$IPFS_PATH/config" ]; then
         "/ip6/::/udp/4001/quic"
     ]' 2>/dev/null
     /usr/local/bin/ipfs config --json Routing.AcceleratedDHTClient false 2>/dev/null
-    /usr/local/bin/ipfs config --json Routing.OptimisticProvide true 2>/dev/null
-    /usr/local/bin/ipfs config --json ConnMgr.HighWater 100 2>/dev/null
-    /usr/local/bin/ipfs config --json ConnMgr.LowWater 20 2>/dev/null
-    /usr/local/bin/ipfs config --json ConnMgr.GracePeriod '"1m"' 2>/dev/null
+    /usr/local/bin/ipfs config --json Routing.OptimisticProvide false 2>/dev/null
+    # Reprovider: announce pins to DHT only every 24h instead of default 22h
+    /usr/local/bin/ipfs config --json Reprovider.Interval '"24h"' 2>/dev/null
+    /usr/local/bin/ipfs config --json Reprovider.Strategy '"pinned"' 2>/dev/null
+    /usr/local/bin/ipfs config --json Swarm.ConnMgr.HighWater 40 2>/dev/null
+    /usr/local/bin/ipfs config --json Swarm.ConnMgr.LowWater 10 2>/dev/null
+    /usr/local/bin/ipfs config --json Swarm.ConnMgr.GracePeriod '"2m"' 2>/dev/null
     /usr/local/bin/ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["*"]' 2>/dev/null
     /usr/local/bin/ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["PUT", "POST", "GET"]' 2>/dev/null
     /usr/local/bin/ipfs config --json API.HTTPHeaders.Access-Control-Allow-Headers '["Authorization"]' 2>/dev/null
-    /usr/local/bin/ipfs config Datastore.GCPeriod '"1h"' 2>/dev/null
+    /usr/local/bin/ipfs config Datastore.GCPeriod '"6h"' 2>/dev/null
     /usr/local/bin/ipfs config Datastore.StorageMax '"10GB"' 2>/dev/null
     set -e  # Re-enable exit on error
     
@@ -265,9 +268,13 @@ else
         /usr/local/bin/ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001 2>/dev/null
         /usr/local/bin/ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080 2>/dev/null
         /usr/local/bin/ipfs config --json Routing.AcceleratedDHTClient false 2>/dev/null
-        /usr/local/bin/ipfs config --json ConnMgr.HighWater 100 2>/dev/null
-        /usr/local/bin/ipfs config --json ConnMgr.LowWater 20 2>/dev/null
-        /usr/local/bin/ipfs config --json ConnMgr.GracePeriod '"1m"' 2>/dev/null
+        /usr/local/bin/ipfs config --json Routing.OptimisticProvide false 2>/dev/null
+        /usr/local/bin/ipfs config --json Reprovider.Interval '"24h"' 2>/dev/null
+        /usr/local/bin/ipfs config --json Reprovider.Strategy '"pinned"' 2>/dev/null
+        /usr/local/bin/ipfs config --json Swarm.ConnMgr.HighWater 40 2>/dev/null
+        /usr/local/bin/ipfs config --json Swarm.ConnMgr.LowWater 10 2>/dev/null
+        /usr/local/bin/ipfs config --json Swarm.ConnMgr.GracePeriod '"2m"' 2>/dev/null
+        /usr/local/bin/ipfs config Datastore.GCPeriod '"6h"' 2>/dev/null
         set -e  # Re-enable exit on error
         
         # Update API authentication headers
