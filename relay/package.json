@@ -17,7 +17,8 @@
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
-    "build:dashboard": "cd src/public/dashboard && npx vite build"
+    "build:dashboard": "cd src/public/dashboard && npx vite build",
+    "postinstall": "patch-package"
   },
   "keywords": [
     "zen",
@@ -74,6 +75,7 @@
     "eslint": "^9.15.0",
     "globals": "^15.12.0",
     "nodemon": "^3.0.2",
+    "patch-package": "^8.0.1",
     "postcss": "^8.5.6",
     "supertest": "^7.2.2",
     "tailwindcss": "latest",
