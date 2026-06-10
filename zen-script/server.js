@@ -22,7 +22,7 @@ import { scanbg, mkpat, scanip6 } from "../lib/scan.js";
 import { getOrCreateIdentity } from "../lib/identity.js";
 import { buildStatus, signStatus } from "../lib/status.js";
 import { attach as attachMcp } from "../lib/mcp/server.js";
-import PeerRegistry from "../lib/peer-registry.js";
+import PeerRegistry from "../lib/preg.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

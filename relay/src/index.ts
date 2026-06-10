@@ -12,7 +12,7 @@ import "zen/lib/multicast.js";
 // @ts-ignore
 import { setupRelayPex } from "zen/lib/pex.js";
 // @ts-ignore
-import { PeerRegistry } from "zen/lib/peer-registry.js";
+import { PeerRegistry } from "zen/lib/preg.js";
 // @ts-ignore
 import { buildStatus, signStatus } from "zen/lib/status.js";
 
