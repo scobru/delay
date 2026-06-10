@@ -17,8 +17,7 @@
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
-    "build:dashboard": "cd src/public/dashboard && npx vite build",
-    "postinstall": "patch-package"
+    "build:dashboard": "cd src/public/dashboard && npx vite build"
   },
   "keywords": [
     "zen",
