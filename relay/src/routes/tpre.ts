@@ -3,7 +3,7 @@ import { loggers } from "../utils/logger";
 import * as umbral from "@nucypher/umbral-pre";
 import { waitForZenData } from "../utils/zen-utils";
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 /**
  * Re-encrypt Endpoint

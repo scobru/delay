@@ -5,21 +5,11 @@
  */
 
 import { Request, Response, NextFunction } from "express";
-import { secureCompare, hashToken } from "../utils/security";
+import { secureCompare, hashToken, validateAdminToken, isAdminPasswordConfigured } from "../utils/security";
 import { authConfig } from "../config";
 import { loggers } from "../utils/logger";
 
 const log = loggers.server || console;
-
-// Cache admin password hash (computed once)
-let adminPasswordHash: string | null = null;
-
-function getAdminPasswordHash(): string | null {
-  if (!adminPasswordHash && authConfig.adminPassword) {
-    adminPasswordHash = hashToken(authConfig.adminPassword);
-  }
-  return adminPasswordHash;
-}
 
 /**
  * Admin authentication middleware
@@ -53,10 +43,10 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
   }
 
   // Secure comparison using hash and timing-safe comparison
-  const tokenHash = hashToken(token);
-  const adminHash = getAdminPasswordHash();
 
-  if (!adminHash) {
+  const isConfigured = isAdminPasswordConfigured();
+
+  if (!isConfigured) {
     log.error("Admin password not configured");
     res.status(503).json({
       success: false,
@@ -65,7 +55,7 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
     return;
   }
 
-  if (secureCompare(tokenHash, adminHash)) {
+  if (validateAdminToken(token)) {
     log.debug(
       {
         ip: req.ip || req.connection.remoteAddress,

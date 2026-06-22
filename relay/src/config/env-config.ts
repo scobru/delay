@@ -99,7 +99,6 @@ export const config = {
   // ============================================================================
 
   auth: {
-    adminPassword: process.env.ADMIN_PASSWORD,
     strictSessionIp: process.env.STRICT_SESSION_IP !== "false",
     // CORS configuration
     corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",") : ["*"],

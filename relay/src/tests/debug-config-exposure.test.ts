@@ -1,6 +1,11 @@
+process.env.ADMIN_PASSWORD = "super-secret-password-12345";
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
 import express from "express";
+
 import request from "supertest";
+
 import setupRoutes from "../routes/index";
 
 // Mock dependencies
@@ -16,7 +21,7 @@ vi.mock("../utils/logger", () => ({
 }));
 
 vi.mock("../config", () => ({
-  authConfig: { adminPassword: "super-secret-password-12345" },
+  authConfig: {},
   ipfsConfig: {
     enabled: false,
     gatewayUrl: "http://localhost:8080",

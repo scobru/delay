@@ -13,6 +13,43 @@ const log = loggers.server || console;
  * Secure token comparison to prevent timing attacks
  * Uses crypto.timingSafeEqual for constant-time comparison
  */
+// Cache admin password hash (computed once)
+let adminPasswordHash: string | null = null;
+let isAdminConfigured: boolean = false;
+
+/**
+ * Get stored admin password hash (or compute on first use)
+ * Clears the raw process.env.ADMIN_PASSWORD from memory for security.
+ */
+export function getAdminPasswordHash(): string | null {
+  if (!adminPasswordHash && process.env.ADMIN_PASSWORD) {
+    adminPasswordHash = hashToken(process.env.ADMIN_PASSWORD);
+    isAdminConfigured = true;
+    // Clear raw password from memory immediately after hashing
+    process.env.ADMIN_PASSWORD = "";
+  }
+  return adminPasswordHash;
+}
+
+/**
+ * Check if the admin password has been configured
+ */
+export function isAdminPasswordConfigured(): boolean {
+  // Call getter to ensure initialization has happened if env var exists
+  getAdminPasswordHash();
+  return isAdminConfigured;
+}
+
+/**
+ * Securely validate an admin token against the hashed password
+ */
+export function validateAdminToken(token: string | null | undefined): boolean {
+  if (!token || typeof token !== "string") return false;
+  const hash = getAdminPasswordHash();
+  if (!hash) return false;
+  return secureCompare(hashToken(token), hash);
+}
+
 export function secureCompare(a: string, b: string): boolean {
   if (a.length !== b.length) {
     return false;

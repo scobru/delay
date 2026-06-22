@@ -1,7 +1,13 @@
+process.env.ADMIN_PASSWORD = "test-password";
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
 import express from "express";
+
 import request from "supertest";
+
 import systemRouter from "../routes/system";
+
 import fs from "fs";
 
 // Mock dependencies
@@ -18,7 +24,7 @@ vi.mock("../utils/logger", () => ({
 
 vi.mock("../config", () => ({
   packageConfig: { version: "1.0.0" },
-  authConfig: { adminPassword: "test-password" },
+  authConfig: {},
 }));
 
 vi.mock("../config/env-config", () => ({

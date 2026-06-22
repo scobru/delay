@@ -6,22 +6,12 @@
  */
 
 import { Request, Response, NextFunction } from "express";
-import { secureCompare, hashToken } from "../utils/security";
+import { secureCompare, hashToken, validateAdminToken, isAdminPasswordConfigured } from "../utils/security";
 import { authConfig } from "../config";
 import { validateApiKey } from "../utils/api-keys-store";
 import { loggers } from "../utils/logger";
 
 const log = loggers.server || console;
-
-// Cache admin password hash (computed once)
-let adminPasswordHash: string | null = null;
-
-function getAdminPasswordHash(): string | null {
-  if (!adminPasswordHash && authConfig.adminPassword) {
-    adminPasswordHash = hashToken(authConfig.adminPassword);
-  }
-  return adminPasswordHash;
-}
 
 /**
  * Admin or API Key authentication middleware
@@ -59,9 +49,9 @@ export async function adminOrApiKeyAuthMiddleware(
 
   // First, try admin token authentication
   const tokenHash = hashToken(token);
-  const adminHash = getAdminPasswordHash();
+  const isConfigured = isAdminPasswordConfigured();
 
-  if (adminHash && secureCompare(tokenHash, adminHash)) {
+  if (isConfigured && validateAdminToken(token)) {
     log.debug({ ip: req.ip, path: req.path }, "Auth: Admin token accepted");
     return next();
   }
