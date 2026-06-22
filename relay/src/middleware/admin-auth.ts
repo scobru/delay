@@ -5,6 +5,7 @@
  */
 
 import { Request, Response, NextFunction } from "express";
+import { isRateLimited, recordFailedAttempt } from "./token-auth";
 import { secureCompare, hashToken } from "../utils/security";
 import { authConfig } from "../config";
 import { loggers } from "../utils/logger";
@@ -27,6 +28,19 @@ function getAdminPasswordHash(): string | null {
  * Uses timing-safe comparison to prevent timing attacks
  */
 export function adminAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const clientIp = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "unknown";
+
+  if (isRateLimited(clientIp)) {
+    log.warn(
+      { ip: clientIp, path: req.path },
+      "Admin auth failed - rate limited"
+    );
+    res.status(429).json({
+      success: false,
+      error: "Too many failed authentication attempts. Please try again later.",
+    });
+    return;
+  }
   // Check Authorization header (Bearer token)
   const authHeader = req.headers["authorization"];
   const bearerToken = authHeader && authHeader.split(" ")[1];
@@ -45,6 +59,7 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
       },
       "Admin auth failed - no token"
     );
+    recordFailedAttempt(clientIp);
     res.status(401).json({
       success: false,
       error: "Unauthorized - Admin token required",
@@ -83,6 +98,7 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
       },
       "Admin auth failed - invalid token"
     );
+    recordFailedAttempt(clientIp);
     res.status(401).json({
       success: false,
       error: "Unauthorized - Invalid admin token",
