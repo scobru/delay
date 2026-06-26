@@ -4,6 +4,8 @@ import { loggers } from "../../utils/logger";
 import type { CustomRequest, IpfsRequestOptions } from "./types";
 import { IPFS_API_TOKEN, getContentTypeFromExtension, detectContentType } from "./utils";
 
+const MAX_JSON_SIZE = 5 * 1024 * 1024; // 5MB maximum size for parsing JSON into memory
+
 const router: Router = Router();
 
 /**
@@ -210,8 +212,25 @@ router.post("/api/:endpoint(*)", async (req: CustomRequest, res: Response) => {
 
     const ipfsReq = http.request(requestOptions, (ipfsRes) => {
       let data = "";
-      ipfsRes.on("data", (chunk) => (data += chunk));
+      let totalLength = 0;
+      let isTooLarge = false;
+
+      ipfsRes.on("data", (chunk) => {
+        if (isTooLarge) return;
+        totalLength += chunk.length;
+        if (totalLength > MAX_JSON_SIZE) {
+          isTooLarge = true;
+          ipfsReq.destroy();
+          if (!res.headersSent) {
+            res.status(413).json({ success: false, endpoint, error: "Response payload too large" });
+          }
+          return;
+        }
+        data += chunk;
+      });
+
       ipfsRes.on("end", () => {
+        if (isTooLarge) return;
         loggers.server.debug({ endpoint, data }, `📡 IPFS API raw response`);
 
         try {
@@ -397,8 +416,20 @@ router.get("/ipfs/:cid", async (req, res) => {
     const ipfsReq = http.request(requestOptions, (ipfsRes) => {
       let contentType = "application/octet-stream";
       const chunks: Buffer[] = [];
+      let totalLength = 0;
+      let isTooLarge = false;
 
       ipfsRes.on("data", (chunk: Buffer) => {
+        if (isTooLarge) return;
+        totalLength += chunk.length;
+        if (totalLength > MAX_JSON_SIZE) {
+          isTooLarge = true;
+          ipfsReq.destroy();
+          if (!res.headersSent) {
+            res.status(413).json({ success: false, error: "Response payload too large" });
+          }
+          return;
+        }
         chunks.push(chunk);
         if (chunks.length === 1 && chunk.length > 0) {
           contentType = detectContentType(chunk);
@@ -406,6 +437,7 @@ router.get("/ipfs/:cid", async (req, res) => {
       });
 
       ipfsRes.on("end", () => {
+        if (isTooLarge) return;
         const buffer = Buffer.concat(chunks);
         res.setHeader("Content-Type", contentType);
         res.setHeader("Content-Length", buffer.length.toString());
@@ -465,8 +497,25 @@ router.get("/cat/:cid/json", async (req: Request, res: Response) => {
 
     const ipfsReq = http.request(requestOptions, (ipfsRes) => {
       let data = "";
-      ipfsRes.on("data", (chunk) => (data += chunk));
+      let totalLength = 0;
+      let isTooLarge = false;
+
+      ipfsRes.on("data", (chunk) => {
+        if (isTooLarge) return;
+        totalLength += chunk.length;
+        if (totalLength > MAX_JSON_SIZE) {
+          isTooLarge = true;
+          ipfsReq.destroy();
+          if (!res.headersSent) {
+            res.status(413).json({ success: false, error: "Response payload too large for JSON parsing" });
+          }
+          return;
+        }
+        data += chunk;
+      });
+
       ipfsRes.on("end", () => {
+        if (isTooLarge) return;
         try {
           const jsonData = JSON.parse(data);
           res.json({ success: true, cid, data: jsonData });
