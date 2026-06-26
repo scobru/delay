@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { Request, Response, NextFunction } from "express";
-import { secureCompare, hashToken } from "../utils/security";
+import { secureCompare, hashToken, validateAdminToken, isAdminPasswordConfigured } from "../utils/security";
 import { authConfig, serverConfig } from "../config/env-config";
 import { loggers } from "../utils/logger";
 
@@ -9,20 +9,6 @@ const AUTH_RATE_LIMIT = 5; // Max failed attempts
 const AUTH_RATE_WINDOW = 15 * 60 * 1000; // 15 minutes
 const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 const activeSessions = new Map<string, { ip: string; expiresAt: number }>(); // Simple in-memory session store
-
-// Get stored admin password hash (or compute on first use)
-let adminPasswordHash: string | null = null;
-
-/**
- * Get stored admin password hash (or compute on first use)
- * @returns {string|null} The admin password hash, or null if not configured
- */
-function getAdminPasswordHash(): string | null {
-  if (!adminPasswordHash && authConfig.adminPassword) {
-    adminPasswordHash = hashToken(authConfig.adminPassword);
-  }
-  return adminPasswordHash;
-}
 
 /**
  * Check if IP is rate limited based on failed authentication attempts
@@ -140,10 +126,10 @@ export const tokenAuthMiddleware = (req: Request, res: Response, next: NextFunct
   }
 
   // Secure token comparison using hash and timing-safe comparison
-  const tokenHash = hashToken(token);
-  const adminHash = getAdminPasswordHash();
 
-  if (adminHash && secureCompare(tokenHash, adminHash)) {
+  const isConfigured = isAdminPasswordConfigured();
+
+  if (isConfigured && validateAdminToken(token)) {
     // Create session for future requests
     const sessionId = createSession(clientIp);
     res.setHeader("X-Session-Token", sessionId);

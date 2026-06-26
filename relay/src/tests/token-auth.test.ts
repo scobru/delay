@@ -1,4 +1,7 @@
+process.env.ADMIN_PASSWORD = "test-password";
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
 import { isRateLimited, recordFailedAttempt } from "../middleware/token-auth";
 
 // Mock dependencies
@@ -14,7 +17,7 @@ vi.mock("../utils/logger", () => ({
 }));
 
 vi.mock("../config/env-config", () => ({
-  authConfig: { adminPassword: "test-password", strictSessionIp: true },
+  authConfig: { strictSessionIp: true },
   serverConfig: { nodeEnv: "test" },
 }));
 

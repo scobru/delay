@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import multer from "multer";
 import FormData from "form-data";
-import { secureCompare, hashToken } from "../utils/security";
+import { secureCompare, hashToken, validateAdminToken, isAdminPasswordConfigured } from "../utils/security";
 import { getZenStorageStats } from "../utils/zen-storage-stats";
 // http import removed
 
@@ -16,14 +16,6 @@ const __dirname = path.dirname(__filename);
 // Configurazione multer per upload file
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Cache admin password hash (computed once)
-let adminPasswordHash: string | null = null;
-function getAdminPasswordHash(): string | null {
-  if (!adminPasswordHash && authConfig.adminPassword) {
-    adminPasswordHash = hashToken(authConfig.adminPassword);
-  }
-  return adminPasswordHash;
-}
 
 // Middleware di autenticazione admin (secure, timing-safe)
 const tokenAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
@@ -47,9 +39,9 @@ const tokenAuthMiddleware = (req: Request, res: Response, next: NextFunction) =>
 
   // Secure comparison using hash and timing-safe comparison
   const tokenHash = hashToken(token);
-  const adminHash = getAdminPasswordHash();
+  const isConfigured = isAdminPasswordConfigured();
 
-  if (adminHash && secureCompare(tokenHash, adminHash)) {
+  if (isConfigured && validateAdminToken(token)) {
     next();
   } else {
     loggers.server.warn(
@@ -394,7 +386,7 @@ export default async (app: express.Application) => {
       (req.headers["authorization"] && (req.headers["authorization"] as string).split(" ")[1]) ||
       req.headers["token"];
 
-    if (token === authConfig.adminPassword) {
+    if (validateAdminToken(token as string)) {
       res.redirect("/api/v1/ipfs/webui/?auth_token=" + encodeURIComponent(token as string));
       return;
     }
@@ -617,7 +609,7 @@ export default async (app: express.Application) => {
   app.get(`${baseRoute}/debug/admin-config`, tokenAuthMiddleware, (req: Request, res: Response) => {
     res.json({
       success: true,
-      adminPasswordStatus: authConfig.adminPassword ? "CONFIGURED" : "NOT_CONFIGURED",
+      adminPasswordStatus: isAdminPasswordConfigured() ? "CONFIGURED" : "NOT_CONFIGURED",
       timestamp: Date.now(),
     });
   });
@@ -636,7 +628,7 @@ export default async (app: express.Application) => {
       const customToken = req.headers["token"];
       const token = bearerToken || customToken;
 
-      if (token === authConfig.adminPassword) {
+      if (validateAdminToken(token as string)) {
         next();
       } else {
         res.status(401).json({ success: false, error: "Unauthorized" });

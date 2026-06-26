@@ -36,7 +36,7 @@ import {
 
 import { startWormholeCleanup } from "./utils/wormhole-cleanup";
 import { tokenAuthMiddleware } from "./middleware/token-auth";
-import { secureCompare, hashToken, createProductionErrorHandler, isOriginAllowed } from "./utils/security";
+import { secureCompare, hashToken, createProductionErrorHandler, isOriginAllowed, validateAdminToken } from "./utils/security";
 
 import { ZEN_PATHS, getZenNode } from "./utils/zen-paths";
 
@@ -167,7 +167,7 @@ async function initializeServer() {
 
     // Se ha headers, verifica il token
     if (msg && msg.headers && msg.headers.token) {
-      const hasValidAuth = msg.headers.token === authConfig.adminPassword;
+      const hasValidAuth = validateAdminToken(msg.headers.token);
       if (hasValidAuth) {
         loggers.server.info(`🔍 PUT allowed - valid token: ${msg.headers}`);
         return true;
@@ -441,7 +441,7 @@ async function initializeServer() {
       const formToken = req.query["_auth_token"]; // Token inviato tramite form
       const token = bearerToken || customToken || formToken;
 
-      if (token === authConfig.adminPassword) {
+      if (validateAdminToken(token as string)) {
         next();
       } else {
         loggers.server.warn(`❌ Accesso negato a ${path} - Token mancante o non valido`);
