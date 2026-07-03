@@ -96,15 +96,15 @@ async function initializeServer() {
     }
   } else if (relayKeysConfig.seaKeypairPath) {
     try {
-      if (fs.existsSync(relayKeysConfig.seaKeypairPath)) {
-        const fileContent = fs.readFileSync(relayKeysConfig.seaKeypairPath, "utf8");
-        relayKeyPair = JSON.parse(fileContent);
-        loggers.server.info(`🔑 Relay KeyPair loaded from path: ${relayKeysConfig.seaKeypairPath}`);
-      } else {
-        loggers.server.warn(`⚠️ Relay KeyPair path configured but file not found: ${relayKeysConfig.seaKeypairPath}`);
-      }
+      const fileContent = await fs.promises.readFile(relayKeysConfig.seaKeypairPath, "utf8");
+      relayKeyPair = JSON.parse(fileContent);
+      loggers.server.info(`🔑 Relay KeyPair loaded from path: ${relayKeysConfig.seaKeypairPath}`);
     } catch (e: any) {
-      loggers.server.error({ err: e.message }, `❌ Failed to load/parse KeyPair from path: ${relayKeysConfig.seaKeypairPath}`);
+      if (e.code === "ENOENT") {
+        loggers.server.warn(`⚠️ Relay KeyPair path configured but file not found: ${relayKeysConfig.seaKeypairPath}`);
+      } else {
+        loggers.server.error({ err: e.message }, `❌ Failed to load/parse KeyPair from path: ${relayKeysConfig.seaKeypairPath}`);
+      }
     }
   }
 
