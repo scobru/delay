@@ -36,8 +36,8 @@ router.post("/reencrypt", async (req, res) => {
 
     // 2. Deserialize Handlers
     const kfragBytes = new Uint8Array(Buffer.from(kfragString, "base64"));
-    // VerifiedKeyFrag non ha un metodo statico fromBytes, usiamo KeyFrag + skipVerification
-    const kfrag = (umbral as any).KeyFrag.fromBytes(kfragBytes).skipVerification();
+    // Deserialize as KeyFrag and bypass verification to obtain a VerifiedKeyFrag
+    const kfrag = umbral.KeyFrag.fromBytes(kfragBytes).skipVerification();
     const capsuleBytes = new Uint8Array(Buffer.from(capsuleB64, 'base64'));
     const capsule = umbral.Capsule.fromBytes(capsuleBytes);
 
