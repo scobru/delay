@@ -696,10 +696,10 @@ router.get("/services/:name/logs", adminAuthMiddleware, async (req, res) => {
     let logFile = "";
 
     // Normalize and validate service name
-    const normalizedName = (serviceName as string).toLowerCase().replace(/%20/g, " ").trim();
+    const normalizedName = (serviceName as string).toLowerCase().trim();
 
     // Strict validation to prevent path traversal and other injection attacks
-    const nameRegex = /^[a-zA-Z0-9\s\-_]+$/;
+    const nameRegex = /^[a-zA-Z0-9 \-_]+$/;
     if (!nameRegex.test(normalizedName)) {
       return res.status(400).json({
         success: false,
