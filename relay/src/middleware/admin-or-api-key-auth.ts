@@ -6,7 +6,12 @@
  */
 
 import { Request, Response, NextFunction } from "express";
-import { secureCompare, hashToken, validateAdminToken, isAdminPasswordConfigured } from "../utils/security";
+import {
+  secureCompare,
+  hashToken,
+  validateAdminToken,
+  isAdminPasswordConfigured,
+} from "../utils/security";
 import { authConfig } from "../config";
 import { validateApiKey } from "../utils/api-keys-store";
 import { loggers } from "../utils/logger";
@@ -59,7 +64,7 @@ export async function adminOrApiKeyAuthMiddleware(
   // If admin token fails, try API key authentication
   if (token.startsWith("shogun-api-")) {
     try {
-      const keyData = validateApiKey(token);
+      const keyData = await validateApiKey(token);
       if (keyData) {
         log.debug(
           {
