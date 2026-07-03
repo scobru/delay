@@ -7,9 +7,9 @@ const router: Router = Router();
 /**
  * List all API keys
  */
-router.get("/", (req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
-    const keys = listApiKeys();
+    const keys = await listApiKeys();
     res.json({ success: true, keys });
   } catch (error: any) {
     loggers.server.error({ error }, "Error listing API keys");
@@ -20,14 +20,14 @@ router.get("/", (req: Request, res: Response) => {
 /**
  * Generate a new API key
  */
-router.post("/generate", (req: Request, res: Response) => {
+router.post("/generate", async (req: Request, res: Response) => {
   try {
     const { name } = req.body;
     if (!name) {
       return res.status(400).json({ success: false, error: "Name is required for the API key" });
     }
 
-    const { token, data } = generateApiKey(name);
+    const { token, data } = await generateApiKey(name);
     res.json({ success: true, token, data });
   } catch (error: any) {
     loggers.server.error({ error }, "Error generating API key");
@@ -38,11 +38,11 @@ router.post("/generate", (req: Request, res: Response) => {
 /**
  * Revoke an API key
  */
-router.delete("/:keyId", (req: Request, res: Response) => {
+router.delete("/:keyId", async (req: Request, res: Response) => {
   try {
     const { keyId } = req.params;
-    const success = revokeApiKey(keyId as string);
-    
+    const success = await revokeApiKey(keyId as string);
+
     if (success) {
       res.json({ success: true, message: "API key revoked successfully" });
     } else {
