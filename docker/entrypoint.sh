@@ -1,6 +1,46 @@
 #!/bin/sh
 set -e
 
+# Load environment variables from /app/relay/.env if it exists and variables are not already set
+if [ -f "/app/relay/.env" ]; then
+    echo "📖 Loading environment variables from /app/relay/.env..."
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Remove carriage return (\r) if any
+        line=$(echo "$line" | tr -d '\r')
+        
+        # Skip comments and empty lines
+        case "$line" in
+            \#*) continue ;;
+            "") continue ;;
+        esac
+        
+        # If the line contains '=', extract key and value
+        case "$line" in
+            *=*)
+                key=$(echo "$line" | cut -d= -f1)
+                value=$(echo "$line" | cut -d= -f2-)
+                
+                # Strip leading/trailing spaces/tabs from key and value
+                key=$(echo "$key" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                value=$(echo "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                
+                # Remove surrounding quotes (single or double) from value if they exist
+                case "$value" in
+                    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+                    \'*\') value="${value#\'}"; value="${value%\'}" ;;
+                esac
+                
+                # Check if the environment variable is already set (do not overwrite)
+                eval "is_set=\${$key+true}"
+                if [ "$is_set" != "true" ]; then
+                    export "$key=$value"
+                fi
+                ;;
+        esac
+    done < "/app/relay/.env"
+fi
+
+
 # Set correct permissions on persistent data volumes
 # These directories are mounted as volumes and need correct permissions
 
@@ -33,7 +73,7 @@ else
 fi
 
 # GunDB data directory
-DATA_DIR="${DATA_DIR:-/app/relay/data}"
+DATA_DIR="${DATA_DIR:-/data/relay-data}"
 echo "🔐 Setting permissions for GunDB data volume at ${DATA_DIR}..."
 if [ -d "$DATA_DIR" ]; then
     echo "✅ GunDB data directory exists, preserving existing data"
@@ -53,7 +93,7 @@ fi
 # Relay keys directory (for SEA keypair)
 KEYS_DIR="${RELAY_SEA_KEYPAIR_PATH%/*}"
 if [ -z "$KEYS_DIR" ] || [ "$KEYS_DIR" = "$RELAY_SEA_KEYPAIR_PATH" ]; then
-    KEYS_DIR="/app/keys"
+    KEYS_DIR="/data/keys"
 fi
 echo "🔐 Setting permissions for relay keys directory at ${KEYS_DIR}..."
 mkdir -p "$KEYS_DIR"
@@ -67,7 +107,7 @@ chown -R node:node /home/node || true
 chmod 755 /home/node || true
 
 # Auto-generate SEA keypair if not configured and keypair file doesn't exist
-KEYPAIR_FILE="${RELAY_SEA_KEYPAIR_PATH:-/app/keys/relay-keypair.json}"
+KEYPAIR_FILE="${RELAY_SEA_KEYPAIR_PATH:-/data/keys/relay-keypair.json}"
 
 # If RELAY_SEA_KEYPAIR_PATH points to a directory, append default filename
 if [ -n "$RELAY_SEA_KEYPAIR_PATH" ] && [ -d "$RELAY_SEA_KEYPAIR_PATH" ]; then
