@@ -191,9 +191,10 @@ RUN ln -sf /usr/local/bin/node /usr/bin/node
 # Note: These directories will be preserved if volumes are mounted
 RUN useradd -m -s /bin/bash ipfs \
     && mkdir -p /data/ipfs \
+    && mkdir -p /data/relay-data \
+    && mkdir -p /data/keys \
+    && mkdir -p /data/zendata \
     && mkdir -p /app/relay \
-    && mkdir -p /app/relay/data \
-    && mkdir -p /app/keys \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /home/ipfs/.config/ipfs/denylists \
     && mkdir -p /root/.config/ipfs/denylists \
@@ -272,9 +273,9 @@ RUN echo "🔍 Verifying dashboard after prune..." && \
 # This creates the keypair during build time
 RUN if [ "$GENERATE_RELAY_KEYS" = "true" ] && [ -z "$RELAY_SEA_KEYPAIR" ] && [ -z "$RELAY_SEA_KEYPAIR_PATH" ]; then \
     echo "🔑 Generating relay SEA keypair..." && \
-    mkdir -p /app/keys && \
-    node /app/relay/scripts/generate-relay-keys-standalone.cjs /app/keys/relay-keypair.json && \
-    echo "✅ Keypair generated at /app/keys/relay-keypair.json" && \
+    mkdir -p /data/keys && \
+    node /app/relay/scripts/generate-relay-keys-standalone.cjs /data/keys/relay-keypair.json && \
+    echo "✅ Keypair generated at /data/keys/relay-keypair.json" && \
     echo "⚠️  IMPORTANT: Mount this file or copy it to a secure location!"; \
     else \
     echo "⏭️  Skipping keypair generation (use GENERATE_RELAY_KEYS=true to enable)"; \
@@ -284,12 +285,14 @@ RUN if [ "$GENERATE_RELAY_KEYS" = "true" ] && [ -z "$RELAY_SEA_KEYPAIR" ] && [ -
 # Note: Volumes will override these permissions, but we set them here for initial setup
 # Use || true to avoid failures if directories don't exist or are already mounted as volumes
 RUN chown -R node:node /app || true \
-    && chown -R node:node /app/relay/data || true \
-    && chown -R node:node /app/keys || true \
+    && chown -R node:node /data/relay-data || true \
+    && chown -R node:node /data/keys || true \
+    && chown -R node:node /data/zendata || true \
     && chown -R ipfs:ipfs /data/ipfs || true \
     && chmod -R 755 /app/relay/src/public || true \
-    && chmod 755 /app/relay/data || true \
-    && chmod 755 /app/keys || true
+    && chmod 755 /data/relay-data || true \
+    && chmod 755 /data/keys || true \
+    && chmod 755 /data/zendata || true
 
 # Final verification - ensure dashboard is accessible
 RUN echo "🔍 Final dashboard verification..." && \

@@ -10,15 +10,8 @@ services:
       - "8080:8080" # IPFS Gateway
       - "4001:4001" # IPFS Swarm
     volumes:
-      # Persist IPFS data (repository, pins, blocks)
-      - ipfs-data:/data/ipfs
-      # Persist GunDB data (radata files)
-      - relay-data:/app/relay/data
-      # Persist ZEN sync engine data
-      - zen-data:/app/relay/data/zendata
-      # Persist relay keys (SEA keypair for relay user)
-      - relay-keys:/app/keys
-      # Persist relay keys (SEA keypair for relay user)
+      # Persist all data in a single volume (IPFS, GunDB, Keys, ZEN)
+      - shogun-data:/data
       # Mount logs for debugging (optional, can be removed in production)
       - ./logs:/var/log/supervisor
     environment:
@@ -40,7 +33,7 @@ services:
       - ADMIN_PASSWORD=shogun2025
       # Relay GunDB User - REQUIRED: RELAY_SEA_KEYPAIR or RELAY_SEA_KEYPAIR_PATH
       # Example: RELAY_SEA_KEYPAIR='{"pub":"...","priv":"...","epub":"...","epriv":"..."}'
-      # Or: RELAY_SEA_KEYPAIR_PATH=/app/keys/relay-keypair.json
+      - RELAY_SEA_KEYPAIR_PATH=/data/keys/relay-keypair.json
       # ============================================================================
       # MODULE ENABLED FLAGS (true/false to enable/disable modules)
       # ============================================================================
@@ -49,7 +42,7 @@ services:
       # ============================================================================
       # GUNDB/STORAGE
       # ============================================================================
-      - DATA_DIR=/app/relay/data
+      - DATA_DIR=/data/relay-data
       - DISABLE_RADISK=false
       - RELAY_PEERS=
       # ============================================================================
@@ -78,7 +71,7 @@ services:
       # ============================================================================
       - ZEN_ENABLED=true
       - ZEN_PATH=/zen
-      - ZEN_DATA_DIR=/app/relay/data/zendata
+      - ZEN_DATA_DIR=/data/zendata
       # ============================================================================
       # ============================================================================
       # ============================================================================
@@ -95,22 +88,8 @@ services:
 
 
 volumes:
-  radata:
-  ipfs_staging:
-  ipfs_data:
-
-  # IPFS repository - contains all IPFS data (blocks, pins, config)
-  ipfs-data:
-    driver: local
-  # GunDB data - contains radata/ directory
-  # This is critical for preserving subscription data, reputation, and all GunDB state
-  relay-data:
-    driver: local
-  # Relay keys - contains relay SEA keypair (RELAY_SEA_KEYPAIR_PATH)
-  relay-keys:
-    driver: local
-  # ZEN sync engine data
-  zen-data:
+  # Unified volume to persist all service data
+  shogun-data:
     driver: local
 
 networks:

@@ -64,9 +64,7 @@ case "${1:-docker}" in
             -p 5001:5001 \
             -p 8080:8080 \
             -p 4001:4001 \
-            -v shogun-ipfs-data:/data/ipfs \
-            -v shogun-s3-data:/app/fakes3/buckets \
-            -v delay-data:/app/relay/radata \
+            -v shogun-data:/data \
             -v "$(pwd)/logs:/var/log/supervisor" \
             -e "ADMIN_PASSWORD=\"$ADMIN_PASSWORD\"" \
             delay:latest

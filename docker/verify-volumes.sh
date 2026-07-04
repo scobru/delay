@@ -11,27 +11,28 @@ echo ""
 ERRORS=0
 WARNINGS=0
 
-# Check IPFS volume
-echo "📦 Checking IPFS volume (/data/ipfs)..."
+# Check if /data is mounted as a volume
+echo "📦 Checking unified data volume (/data)..."
+if mountpoint -q /data 2>/dev/null; then
+    echo "✅ /data is mounted as a volume (data will persist)"
+else
+    echo "⚠️  WARNING: /data is not a volume mount!"
+    echo "   Data will be lost when container is removed!"
+    WARNINGS=$((WARNINGS + 1))
+fi
+
+echo ""
+
+# Check IPFS directory under /data
+echo "📦 Checking IPFS directory (/data/ipfs)..."
 if [ ! -d "/data/ipfs" ]; then
-    echo "❌ ERROR: /data/ipfs directory does not exist!"
-    ERRORS=$((ERRORS + 1))
+    echo "ℹ️  IPFS directory does not exist yet (will be created on startup)"
 elif [ ! -f "/data/ipfs/config" ]; then
     echo "⚠️  WARNING: IPFS not initialized (config file missing)"
     echo "   This is normal on first run, but if you had pins before, they may be lost!"
     WARNINGS=$((WARNINGS + 1))
 else
-    echo "✅ IPFS volume mounted and initialized"
-    
-    # Check if it's a volume mount (not just a directory in the container)
-    if mountpoint -q /data/ipfs 2>/dev/null; then
-        echo "✅ IPFS is mounted as a volume (data will persist)"
-    else
-        echo "⚠️  WARNING: /data/ipfs is not a volume mount!"
-        echo "   Data will be lost when container is removed!"
-        WARNINGS=$((WARNINGS + 1))
-    fi
-    
+    echo "✅ IPFS directory exists and is initialized"
     # Check for existing pins
     if [ -d "/data/ipfs/pins" ] || [ -f "/data/ipfs/pin-store" ]; then
         echo "✅ IPFS pin data found"
@@ -40,39 +41,21 @@ fi
 
 echo ""
 
-# Check GunDB data volume
-echo "💾 Checking GunDB data volume (/app/relay/data)..."
-if [ ! -d "/app/relay/data" ]; then
-    echo "❌ ERROR: /app/relay/data directory does not exist!"
-    ERRORS=$((ERRORS + 1))
+# Check GunDB data directory
+echo "💾 Checking GunDB data directory (/data/relay-data)..."
+if [ ! -d "/data/relay-data" ]; then
+    echo "ℹ️  GunDB data directory does not exist yet (will be created on startup)"
 else
     echo "✅ GunDB data directory exists"
-    
-    if mountpoint -q /app/relay/data 2>/dev/null; then
-        echo "✅ GunDB data is mounted as a volume (data will persist)"
-    else
-        echo "⚠️  WARNING: /app/relay/data is not a volume mount!"
-        echo "   Data will be lost when container is removed!"
-        WARNINGS=$((WARNINGS + 1))
-    fi
 fi
 
 echo ""
 
-# Check relay keys volume
-echo "🔑 Checking relay keys volume (/app/keys)..."
-# Check if keys are provided via env var (preferred method)
+# Check relay keys directory
+echo "🔑 Checking relay keys directory..."
 if [ -n "$RELAY_SEA_KEYPAIR" ]; then
     echo "✅ Relay keys configured via RELAY_SEA_KEYPAIR env var"
     echo "   Keys are provided via environment (no file needed)"
-    # Still check if directory exists for other purposes
-    if [ -d "/app/keys" ]; then
-        if mountpoint -q /app/keys 2>/dev/null; then
-            echo "ℹ️  /app/keys is mounted as a volume (optional, for other key files)"
-        else
-            echo "ℹ️  /app/keys exists but is not a volume mount (OK if using env var)"
-        fi
-    fi
 elif [ -n "$RELAY_SEA_KEYPAIR_PATH" ]; then
     echo "✅ Relay keys configured via RELAY_SEA_KEYPAIR_PATH env var"
     echo "   Keypair path: $RELAY_SEA_KEYPAIR_PATH"
@@ -81,43 +64,16 @@ elif [ -n "$RELAY_SEA_KEYPAIR_PATH" ]; then
     else
         echo "ℹ️  Keypair file not found (will be auto-generated if needed)"
     fi
-    # Check if the path is in /app/keys and if it's a volume
-    if echo "$RELAY_SEA_KEYPAIR_PATH" | grep -q "^/app/keys"; then
-        if [ -d "/app/keys" ]; then
-            if mountpoint -q /app/keys 2>/dev/null; then
-                echo "✅ /app/keys is mounted as a volume (keys will persist)"
-            else
-                echo "⚠️  WARNING: /app/keys is not a volume mount!"
-                echo "   Keys will be lost when container is removed!"
-                WARNINGS=$((WARNINGS + 1))
-            fi
-        fi
-    fi
 else
     # No env var configured, check for default file location
-    if [ ! -d "/app/keys" ]; then
-        echo "⚠️  WARNING: /app/keys directory does not exist"
-        echo "   Relay keys will be regenerated on each deploy"
-        echo "   Consider setting RELAY_SEA_KEYPAIR or RELAY_SEA_KEYPAIR_PATH env var"
-        WARNINGS=$((WARNINGS + 1))
+    if [ ! -d "/data/keys" ]; then
+        echo "ℹ️  Relay keys directory does not exist yet (will be created on startup)"
     else
         echo "✅ Relay keys directory exists"
-        
-        if mountpoint -q /app/keys 2>/dev/null; then
-            echo "✅ Relay keys are mounted as a volume (keys will persist)"
-        else
-            echo "⚠️  WARNING: /app/keys is not a volume mount!"
-            echo "   Keys will be lost when container is removed!"
-            echo "   Consider using RELAY_SEA_KEYPAIR env var instead"
-            WARNINGS=$((WARNINGS + 1))
-        fi
-        
-        if [ -f "/app/keys/relay-keypair.json" ]; then
+        if [ -f "/data/keys/relay-keypair.json" ]; then
             echo "✅ Relay keypair found"
         else
-            echo "⚠️  WARNING: Relay keypair not found"
-            echo "   Relay user will be recreated on startup"
-            echo "   Consider setting RELAY_SEA_KEYPAIR or RELAY_SEA_KEYPAIR_PATH env var"
+            echo "⚠️  WARNING: Relay keypair not found (will be auto-generated)"
             WARNINGS=$((WARNINGS + 1))
         fi
     fi
