@@ -169,12 +169,15 @@ async function initializeServer() {
     if (msg && msg.headers && msg.headers.token) {
       const hasValidAuth = validateAdminToken(msg.headers.token);
       if (hasValidAuth) {
-        loggers.server.info(`🔍 PUT allowed - valid token: ${msg.headers}`);
+        loggers.server.debug("🔍 PUT allowed - valid token");
         return true;
       }
     }
 
-    loggers.server.warn(`❌ Operation denied - no valid auth: ${JSON.stringify(msg.headers)}`);
+    // Do not log header contents: they may contain (attempted) tokens
+    loggers.server.warn(
+      `❌ Operation denied - no valid auth (token present: ${!!(msg && msg.headers && msg.headers.token)})`
+    );
     return false;
   }
 
