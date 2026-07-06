@@ -7,6 +7,7 @@
  * @module utils/memory-utils
  */
 
+import v8 from "v8";
 import { loggers } from "./logger";
 
 const log = loggers.server;
@@ -23,12 +24,25 @@ interface MemoryStats {
 }
 
 /**
- * Default heap limit in MB (Node.js default or from --max-old-space-size)
+ * Actual heap limit in MB as reported by V8 (accounts for --max-old-space-size,
+ * container limits, and machine defaults). The previous implementation assumed
+ * a fixed 4096 MB when NODE_OPTIONS wasn't set, so memory pressure was never
+ * detected on smaller machines (and mis-detected on larger ones).
  */
-const DEFAULT_HEAP_LIMIT_MB = parseInt(
-  process.env.NODE_OPTIONS?.match(/--max-old-space-size=(\d+)/)?.[1] || "4096",
-  10
-);
+function getHeapLimitMB(): number {
+  try {
+    const limitBytes = v8.getHeapStatistics().heap_size_limit;
+    if (limitBytes > 0) {
+      return Math.round(limitBytes / (1024 * 1024));
+    }
+  } catch (e) {
+    // fall through to env-based fallback
+  }
+  return parseInt(
+    process.env.NODE_OPTIONS?.match(/--max-old-space-size=(\d+)/)?.[1] || "4096",
+    10
+  );
+}
 
 /**
  * Get current memory usage statistics
@@ -45,7 +59,7 @@ function getMemoryUsage(): MemoryStats {
     heapTotalMB,
     externalMB,
     rssMemoryMB,
-    heapUsagePercent: Math.round((heapUsedMB / DEFAULT_HEAP_LIMIT_MB) * 100),
+    heapUsagePercent: Math.round((heapUsedMB / getHeapLimitMB()) * 100),
   };
 }
 
