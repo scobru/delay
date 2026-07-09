@@ -59,7 +59,6 @@ import debugRouter from "./debug";
 import visualGraphRouter from "./visualGraph";
 // torrentRouter removed
 import authRouter from "./auth";
-// TPRE removed
 import networkRouter from "./network";
 
 import { ipfsRequest } from "../utils/ipfs-client";
@@ -589,9 +588,7 @@ export default async (app: express.Application) => {
   // Route di autenticazione
   app.use(`${baseRoute}/auth`, authRouter);
 
-  // Route TPRE per Threshold Proxy Re-Encryption
-  // TPRE endpoint removed
-  loggers.server.info(`✅ TPRE routes registered`);
+
 
 
   // Route di test per verificare se le route sono registrate correttamente
