@@ -32,7 +32,6 @@
   "author": "Shogun Team",
   "license": "MIT",
   "dependencies": {
-    "@nucypher/umbral-pre": "^0.10.0",
     "@types/vis": "^4.21.27",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
