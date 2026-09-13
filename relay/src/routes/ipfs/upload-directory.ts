@@ -4,6 +4,7 @@ import FormData from "form-data";
 import { loggers } from "../../utils/logger";
 import { ipfsUpload } from "../../utils/ipfs-client";
 import { adminOrApiKeyAuthMiddleware } from "../../middleware/admin-or-api-key-auth";
+import { saveSystemHash, SystemHashMetadata } from "../../utils/system-hashes-store";
 
 const router: Router = Router();
 
@@ -66,28 +67,46 @@ router.post(
           .json({ success: false, error: "Directory CID not found in IPFS response" });
       }
 
-      const uploadData = {
-        directoryCid,
+      const mappedFiles = files.map((f) => ({
+        name: f.originalname,
+        path: f.fieldname && f.fieldname !== "files" ? f.fieldname : f.originalname,
+        size: f.size,
+        mimetype: f.mimetype || "application/octet-stream",
+      }));
+
+      const dirName = (req.body.dirName as string) || `Directory (${files.length} files)`;
+
+      // Persist directory metadata in system-hashes store
+      const metadata: SystemHashMetadata = {
+        hash: directoryCid,
+        userAddress: (req.body.userAddress as string) || "admin-upload",
+        timestamp: Date.now(),
+        fileName: dirName,
+        displayName: dirName,
+        originalName: dirName,
+        fileSize: totalSize,
+        contentType: "application/directory",
+        isDirectory: true,
+        isEncrypted: false,
         fileCount: files.length,
-        totalSize,
-        totalSizeMB,
-        files: files.map((f) => ({
-          name: f.originalname,
-          path: f.fieldname && f.fieldname !== "files" ? f.fieldname : f.originalname,
-          size: f.size,
-          mimetype: f.mimetype,
-        })),
-        uploadedAt: Date.now(),
+        files: mappedFiles,
       };
+
+      try {
+        await saveSystemHash(metadata);
+      } catch (saveErr) {
+        loggers.server.warn({ err: saveErr }, "⚠️ Could not auto-save directory metadata in system-hashes-store");
+      }
 
       res.json({
         success: true,
         cid: directoryCid,
+        hash: directoryCid,
         directoryCid,
         fileCount: files.length,
         totalSize,
         totalSizeMB,
-        files: uploadData.files,
+        files: mappedFiles,
       });
     } catch (error: unknown) {
       loggers.server.error({ err: error }, "❌ IPFS Directory Upload error");

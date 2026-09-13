@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 
-
 interface Pin {
   cid: string
   name: string
-  type: string
+  pinType: string
+  type: 'file' | 'directory'
   timestamp: number
   size?: number
   metadata?: any
@@ -18,6 +18,35 @@ interface PreviewState {
   content?: string
   blob?: Blob
   url?: string
+  isDirectory?: boolean
+  files?: Array<{ name: string; path: string; size?: number; mimetype?: string }>
+}
+
+const getMimeFromFilename = (filename: string): string => {
+  const ext = filename.split('.').pop()?.toLowerCase() || ''
+  const mimes: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    svg: 'image/svg+xml',
+    bmp: 'image/bmp',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    pdf: 'application/pdf',
+    txt: 'text/plain',
+    json: 'application/json',
+    html: 'text/html',
+    css: 'text/css',
+    js: 'application/javascript',
+    ts: 'text/plain',
+    md: 'text/markdown',
+  }
+  return mimes[ext] || 'application/octet-stream'
 }
 
 function Files() {
@@ -29,17 +58,23 @@ function Files() {
   const [dragActive, setDragActive] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   
-  // New State variables
+  // Search & Filter
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
 
-  // ⚡ Bolt: Debounce search input to reduce re-renders and lag on large arrays
+  // Rename modal state
+  const [editingPin, setEditingPin] = useState<{ cid: string; currentName: string } | null>(null)
+  const [editNameInput, setEditNameInput] = useState('')
+  const [isSavingName, setIsSavingName] = useState(false)
+
+  // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery)
     }, 300)
     return () => clearTimeout(handler)
   }, [searchQuery])
+
   const [filterType, setFilterType] = useState('all')
   const [uploadMode, setUploadMode] = useState<'single' | 'directory'>('single')
   const [encryptUpload, setEncryptUpload] = useState(false)
@@ -58,19 +93,33 @@ function Files() {
       ])
       
       const pinsData = await pinsRes.json()
-      const metaData = await metaRes.json()
+      let metaData: any = {}
+      try {
+        metaData = await metaRes.json()
+      } catch {
+        metaData = {}
+      }
       const systemHashes = metaData.systemHashes || {}
 
       if (pinsData.pins) {
-        const mappedPins = Object.entries(pinsData.pins).map(([cid, info]: [string, any]) => {
-          const meta = systemHashes[cid] || {}
+        const mappedPins: Pin[] = Object.entries(pinsData.pins).map(([cid, info]: [string, any]) => {
+          const meta = systemHashes[cid] || info.metadata || {}
+          const isDirectory = meta.isDirectory === true || info.isDirectory === true
+          const displayName = meta.displayName || meta.fileName || meta.originalName || info.Name || 'Unnamed'
+          const realSize = meta.fileSize ?? info.Size ?? 0
+
           return {
             cid,
-            name: meta.displayName || meta.fileName || meta.originalName || info.Name || 'Unnamed',
-            type: info.Type || 'recursive',
-            timestamp: meta.timestamp || Date.now(),
-            size: meta.fileSize,
-            metadata: meta
+            name: displayName,
+            pinType: info.Type || 'recursive',
+            type: isDirectory ? 'directory' : 'file',
+            timestamp: meta.timestamp || info.timestamp || Date.now(),
+            size: realSize,
+            metadata: {
+              ...meta,
+              contentType: meta.contentType || info.contentType,
+              isDirectory
+            }
           }
         })
         setPins(mappedPins.sort((a, b) => b.timestamp - a.timestamp))
@@ -95,8 +144,21 @@ function Files() {
     })
   }, [pins, debouncedSearchQuery, filterType])
 
-  // --- File Handling & Encryption ---
+  // --- Icon Helper ---
+  const getFileIcon = (pin: Pin): string => {
+    if (pin.type === 'directory' || pin.metadata?.isDirectory) return '📁'
+    const mime = (pin.metadata?.contentType || '').toLowerCase()
+    const name = (pin.name || '').toLowerCase()
+    if (mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name)) return '🖼️'
+    if (mime.startsWith('video/') || /\.(mp4|webm|mkv|mov|avi)$/i.test(name)) return '🎬'
+    if (mime.startsWith('audio/') || /\.(mp3|wav|ogg|flac|m4a)$/i.test(name)) return '🎵'
+    if (mime === 'application/pdf' || name.endsWith('.pdf')) return '📕'
+    if (mime.startsWith('text/') || /\.(txt|md|json|csv|js|ts|html|css)$/i.test(name)) return '📄'
+    if (pin.metadata?.isEncrypted) return '🔒'
+    return '📄'
+  }
 
+  // --- Encryption ---
   const deriveKey = async (password: string, salt: Uint8Array) => {
     const enc = new TextEncoder()
     const keyMaterial = await window.crypto.subtle.importKey(
@@ -126,8 +188,12 @@ function Files() {
     return combined
   }
 
-  const handleUpload = async (event?: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event?.target.files || (fileInputRef.current?.files)
+  // --- Upload Handler ---
+  const handleUpload = async (
+    event?: React.ChangeEvent<HTMLInputElement>,
+    droppedFiles?: FileList
+  ) => {
+    const files = droppedFiles || event?.target.files || (fileInputRef.current?.files)
     if (!files || files.length === 0) return
 
     setUploading(true)
@@ -137,10 +203,17 @@ function Files() {
     try {
       const formData = new FormData()
       const token = adminToken || ''
+      let uploadFileName = ''
       
       if (uploadMode === 'single') {
         let file = files[0]
-        const name = fileNameOverride || file.name
+        let name = fileNameOverride.trim() || file.name
+        // Preserve original extension if custom filename doesn't include one
+        if (fileNameOverride.trim() && !fileNameOverride.includes('.') && file.name.includes('.')) {
+          const ext = file.name.split('.').pop()
+          if (ext) name = `${fileNameOverride.trim()}.${ext}`
+        }
+        uploadFileName = name
         
         if (encryptUpload) {
           setStatusMessage('Encrypting...')
@@ -150,9 +223,13 @@ function Files() {
           const encryptedBytes = await encryptData(buffer, token)
           const encryptedBlob = new Blob([encryptedBytes], { type: 'application/octet-stream' })
           file = new File([encryptedBlob], name + '.enc', { type: 'application/octet-stream' })
+          uploadFileName = name + '.enc'
         }
         
-        formData.append('file', file, encryptUpload ? file.name : name)
+        formData.append('file', file, uploadFileName)
+        formData.append('customName', uploadFileName)
+        formData.append('fileName', uploadFileName)
+        formData.append('isEncrypted', String(encryptUpload))
       } else {
         Array.from(files).forEach(file => {
           // @ts-ignore
@@ -176,8 +253,11 @@ function Files() {
       xhr.onload = async () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           const result = JSON.parse(xhr.responseText)
-          setStatusMessage('✅ Upload complete!')
-          await saveMetadata(result, files, uploadMode === 'directory')
+          setStatusMessage(`✅ Upload complete: ${uploadFileName || (uploadMode === 'directory' ? 'Directory' : 'File')}`)
+          await saveMetadata(result, files, uploadMode === 'directory', uploadFileName)
+          setFileNameOverride('')
+          if (fileInputRef.current) fileInputRef.current.value = ''
+          if (dirInputRef.current) dirInputRef.current.value = ''
           fetchPins()
         } else {
           setStatusMessage(`❌ Upload failed: ${xhr.statusText}`)
@@ -199,11 +279,16 @@ function Files() {
     }
   }
 
-  const saveMetadata = async (result: any, files: FileList, isDir: boolean) => {
+  const saveMetadata = async (
+    result: any,
+    files: FileList | File[],
+    isDir: boolean,
+    customName?: string
+  ) => {
     try {
-      const hash = result.directoryCid || result.cid || result.file?.hash
+      const hash = result.directoryCid || result.cid || result.hash || result.file?.hash
       const mainFile = files[0]
-      const name = fileNameOverride || mainFile.name
+      const name = customName || fileNameOverride.trim() || mainFile?.name || 'Uploaded File'
       
       const metadata = {
         hash,
@@ -211,12 +296,13 @@ function Files() {
         timestamp: Date.now(),
         fileName: isDir ? `Directory (${files.length} files)` : name,
         displayName: isDir ? `Directory (${files.length} files)` : name,
-        originalName: isDir ? `Directory (${files.length} files)` : mainFile.name,
-        fileSize: result.totalSize || mainFile.size,
+        originalName: isDir ? `Directory (${files.length} files)` : (mainFile?.name || name),
+        fileSize: result.totalSize || result.size || result.file?.size || (mainFile ? mainFile.size : 0),
         isEncrypted: encryptUpload && !isDir,
-        contentType: isDir ? 'application/directory' : (mainFile.type || 'application/octet-stream'),
+        contentType: isDir ? 'application/directory' : (mainFile?.type || getMimeFromFilename(name)),
         isDirectory: isDir,
-        fileCount: files.length
+        fileCount: files.length,
+        files: isDir && result.files ? result.files : undefined
       }
 
       await fetch('/api/v1/user-uploads/save-system-hash', {
@@ -229,24 +315,63 @@ function Files() {
     }
   }
 
-  // --- Preview Logic ---
+  // --- Direct Download Action ---
+  const handleDownload = async (pin: Pin) => {
+    try {
+      setStatusMessage(`Downloading ${pin.name}...`)
+      const res = await fetch(`/api/v1/ipfs/cat/${pin.cid}?download=true`, { headers: getAuthHeaders() })
+      if (!res.ok) throw new Error('Failed to download content')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const downloadFilename = pin.name && pin.name !== 'Unnamed' ? pin.name : `${pin.cid}`
+      a.download = downloadFilename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setStatusMessage(`✅ Downloaded: ${downloadFilename}`)
+      setTimeout(() => setStatusMessage(''), 3000)
+    } catch (e: any) {
+      setStatusMessage(`❌ Download error: ${e.message}`)
+    }
+  }
 
+  // --- Preview Logic ---
   const handlePreview = async (pin: Pin) => {
     try {
+      if (pin.type === 'directory' || pin.metadata?.isDirectory) {
+        setPreview({
+          cid: pin.cid,
+          name: pin.name,
+          type: 'application/directory',
+          isDirectory: true,
+          files: pin.metadata?.files || []
+        })
+        return
+      }
+
       setStatusMessage('Loading preview...')
       const res = await fetch(`/api/v1/ipfs/cat/${pin.cid}`, { headers: getAuthHeaders() })
       if (!res.ok) throw new Error('Failed to fetch content')
       
-      const blob = await res.blob()
+      const rawBlob = await res.blob()
+      let type = res.headers.get('Content-Type') || ''
+      if (!type || type === 'application/octet-stream') {
+        type = pin.metadata?.contentType || getMimeFromFilename(pin.name)
+      }
+      
+      const blob = new Blob([rawBlob], { type })
       const url = URL.createObjectURL(blob)
-      const type = res.headers.get('Content-Type') || 'unknown'
       
       setPreview({
         cid: pin.cid,
         name: pin.name,
         type: type,
         blob,
-        url
+        url,
+        isDirectory: false
       })
       setStatusMessage('')
     } catch (e: any) {
@@ -259,8 +384,37 @@ function Files() {
     setPreview(null)
   }
 
-  // --- Actions ---
+  // --- Rename Pin ---
+  const openRenameModal = (pin: Pin) => {
+    setEditingPin({ cid: pin.cid, currentName: pin.name })
+    setEditNameInput(pin.name === 'Unnamed' ? '' : pin.name)
+  }
 
+  const handleSaveRename = async () => {
+    if (!editingPin || !editNameInput.trim()) return
+    setIsSavingName(true)
+    try {
+      await fetch('/api/v1/user-uploads/save-system-hash', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hash: editingPin.cid,
+          fileName: editNameInput.trim(),
+          displayName: editNameInput.trim()
+        })
+      })
+      setStatusMessage(`✅ Renamed to ${editNameInput.trim()}`)
+      setEditingPin(null)
+      fetchPins()
+      setTimeout(() => setStatusMessage(''), 3000)
+    } catch (e: any) {
+      setStatusMessage(`❌ Rename failed: ${e.message}`)
+    } finally {
+      setIsSavingName(false)
+    }
+  }
+
+  // --- Actions ---
   const handleRemove = async (cid: string) => {
     if (!confirm('Are you sure you want to remove this pin?')) return
     try {
@@ -366,7 +520,13 @@ function Files() {
             className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-300 ${dragActive ? 'border-primary bg-primary/10 scale-[0.99] shadow-inner' : 'border-base-content/10 bg-base-200/30'}`}
             onDragOver={e => { e.preventDefault(); setDragActive(true) }}
             onDragLeave={() => setDragActive(false)}
-            onDrop={e => { e.preventDefault(); setDragActive(false) }}
+            onDrop={e => { 
+              e.preventDefault() 
+              setDragActive(false) 
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleUpload(undefined, e.dataTransfer.files)
+              }
+            }}
           >
             {/* Mode Switcher */}
             <div className="flex justify-center mb-8">
@@ -432,7 +592,7 @@ function Files() {
                     />
                   )}
                   <div className="text-[10px] uppercase font-black tracking-widest opacity-30 mt-4">
-                     Maximum file size depends on node configuration
+                     Drag & drop files here or click to select
                   </div>
                </div>
             </div>
@@ -480,8 +640,8 @@ function Files() {
                 onChange={e => setFilterType(e.target.value)}
               >
                 <option value="all">ALL OBJECTS</option>
-                <option value="recursive">RECURSIVE</option>
-                <option value="direct">DIRECT</option>
+                <option value="file">FILES ONLY</option>
+                <option value="directory">DIRECTORIES ONLY</option>
               </select>
            </div>
         </div>
@@ -504,12 +664,23 @@ function Files() {
                 <div className="p-6 flex-1">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-xl bg-base-300/50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform shadow-inner">
-                      {pin.type === 'recursive' ? '📁' : '📄'}
+                      {getFileIcon(pin)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-base truncate group-hover:text-primary transition-colors" title={pin.name}>{pin.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-base truncate group-hover:text-primary transition-colors flex-1" title={pin.name}>{pin.name}</h4>
+                        <button 
+                          onClick={() => openRenameModal(pin)} 
+                          className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity p-1 text-xs" 
+                          title="Rename / Set Name"
+                        >
+                          ✏️
+                        </button>
+                      </div>
                       <div className="flex items-center gap-1.5 mt-1">
-                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded bg-base-300 uppercase tracking-tight ${pin.type === 'recursive' ? 'text-secondary' : 'text-primary'}`}>{pin.type}</span>
+                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded bg-base-300 uppercase tracking-tight ${pin.type === 'directory' ? 'text-secondary' : 'text-primary'}`}>
+                           {pin.type === 'directory' ? 'DIRECTORY' : 'FILE'}
+                         </span>
                          <span className="text-[10px] font-medium opacity-40 font-mono truncate tracking-tighter">{pin.cid}</span>
                       </div>
                     </div>
@@ -527,9 +698,12 @@ function Files() {
                   </div>
                 </div>
                 
-                <div className="bg-base-300/30 p-3 flex gap-2 justify-end">
+                <div className="bg-base-300/30 p-3 flex gap-2 justify-end items-center">
                   <button className="btn btn-ghost btn-xs rounded-lg hover:bg-primary/10 hover:text-primary" onClick={() => handlePreview(pin)} title="Preview Content">
                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                  <button className="btn btn-ghost btn-xs rounded-lg hover:bg-success/10 hover:text-success" onClick={() => handleDownload(pin)} title="Download File">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                   </button>
                   <button className="btn btn-ghost btn-xs rounded-lg hover:bg-info/10 hover:text-info" onClick={() => {
                     navigator.clipboard.writeText(pin.cid)
@@ -549,13 +723,42 @@ function Files() {
         )}
       </div>
 
+      {/* Rename Modal */}
+      {editingPin && (
+        <dialog className="modal modal-open backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="modal-box glass-card rounded-3xl p-6 border-white/20 shadow-2xl max-w-md">
+            <h3 className="font-black text-lg mb-2">Rename IPFS Object</h3>
+            <p className="text-xs opacity-50 font-mono mb-4 truncate">{editingPin.cid}</p>
+            <input 
+              type="text" 
+              className="input input-bordered w-full bg-base-100/50 mb-6" 
+              placeholder="Enter new name..." 
+              value={editNameInput} 
+              onChange={e => setEditNameInput(e.target.value)}
+              autoFocus
+            />
+            <div className="modal-action">
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditingPin(null)}>Cancel</button>
+              <button className="btn btn-primary btn-sm" onClick={handleSaveRename} disabled={isSavingName || !editNameInput.trim()}>
+                {isSavingName ? 'Saving...' : 'Save Name'}
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button onClick={() => setEditingPin(null)}>close</button>
+          </form>
+        </dialog>
+      )}
+
       {/* Modern Preview Modal */}
       {preview && (
         <dialog className="modal modal-open backdrop-blur-sm animate-in fade-in duration-300">
           <div className="modal-box max-w-4xl glass-card rounded-3xl p-0 overflow-hidden border-white/20 shadow-2xl">
             <div className="flex justify-between items-center p-6 bg-base-300/50 border-b border-base-content/5">
               <div className="flex items-center gap-4">
-                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">🔍</div>
+                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">
+                   {preview.isDirectory ? '📁' : '🔍'}
+                 </div>
                  <div>
                     <h3 className="font-black text-lg truncate leading-none mb-1">{preview.name}</h3>
                     <p className="text-[10px] font-mono opacity-40 leading-none">{preview.cid}</p>
@@ -567,30 +770,72 @@ function Files() {
             </div>
             
             <div className="p-8 flex justify-center bg-base-100/30">
-              <div className="max-h-[60vh] w-full overflow-auto rounded-xl shadow-inner bg-base-200/50">
-                {preview.type.startsWith('image/') && <img src={preview.url} alt="preview" className="max-w-full mx-auto" />}
-                {preview.type.startsWith('video/') && <video src={preview.url} controls className="max-w-full mx-auto" />}
-                {preview.type.startsWith('audio/') && <div className="p-10"><audio src={preview.url} controls className="w-full" /></div>}
-                {preview.type === 'application/pdf' && <iframe src={preview.url} title="PDF Preview" className="w-full h-[60vh]" />}
-                {(preview.type.startsWith('text/') || preview.type.includes('json')) && (
-                  <iframe src={preview.url} title="Text Preview" className="w-full h-[60vh] bg-transparent" />
-                )}
-                {!preview.type.match(/image|video|audio|pdf|text|json/) && (
-                  <div className="text-center py-20 px-10">
-                    <div className="text-6xl mb-6">📦</div>
-                    <h4 className="font-black text-xl uppercase tracking-widest opacity-30 mb-2">Binary Object</h4>
-                    <p className="text-sm opacity-30 mb-8 max-w-xs mx-auto">This object type cannot be previewed in the browser.</p>
-                    <a href={preview.url} download={preview.name} className="btn gradient-primary border-0 rounded-2xl px-10 font-black tracking-widest">
-                       DOWNLOAD DATA
-                    </a>
+              <div className="max-h-[60vh] w-full overflow-auto rounded-xl shadow-inner bg-base-200/50 p-4">
+                {preview.isDirectory ? (
+                  <div className="flex flex-col gap-4">
+                    <div className="text-sm font-bold opacity-70">
+                      Directory contents {preview.files && preview.files.length > 0 ? `(${preview.files.length} files)` : ''}
+                    </div>
+                    {preview.files && preview.files.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        {preview.files.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-3 bg-base-100/60 rounded-xl border border-base-content/5 hover:bg-base-100 transition-colors">
+                            <div className="flex items-center gap-3 truncate">
+                              <span>📄</span>
+                              <span className="font-medium text-sm truncate">{file.name || file.path}</span>
+                              <span className="text-xs opacity-40">({formatBytes(file.size || 0)})</span>
+                            </div>
+                            <a 
+                              href={`/api/v1/ipfs/cat-directory/${preview.cid}/${encodeURIComponent(file.path || file.name)}?download=true`}
+                              download={file.name}
+                              className="btn btn-xs btn-ghost hover:bg-primary/10 hover:text-primary"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 opacity-40 text-sm">
+                        No direct file list available in metadata. Files can be accessed via IPFS path `/ipfs/${preview.cid}/&lt;filename&gt;`.
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <>
+                    {preview.type.startsWith('image/') && (
+                      <img src={preview.url} alt="preview" className="max-w-full max-h-[55vh] mx-auto object-contain rounded-lg shadow-sm" />
+                    )}
+                    {preview.type.startsWith('video/') && (
+                      <video src={preview.url} controls className="max-w-full max-h-[55vh] mx-auto rounded-lg" />
+                    )}
+                    {preview.type.startsWith('audio/') && (
+                      <div className="p-10"><audio src={preview.url} controls className="w-full" /></div>
+                    )}
+                    {preview.type === 'application/pdf' && (
+                      <iframe src={preview.url} title="PDF Preview" className="w-full h-[60vh] rounded-lg" />
+                    )}
+                    {(preview.type.startsWith('text/') || preview.type.includes('json')) && (
+                      <iframe src={preview.url} title="Text Preview" className="w-full h-[60vh] bg-transparent rounded-lg" />
+                    )}
+                    {!preview.type.match(/image|video|audio|pdf|text|json/) && (
+                      <div className="text-center py-20 px-10">
+                        <div className="text-6xl mb-6">📦</div>
+                        <h4 className="font-black text-xl uppercase tracking-widest opacity-30 mb-2">Binary Object</h4>
+                        <p className="text-sm opacity-30 mb-8 max-w-xs mx-auto">This object type cannot be rendered inline in the browser.</p>
+                        <a href={preview.url} download={preview.name && preview.name !== 'Unnamed' ? preview.name : preview.cid} className="btn gradient-primary border-0 rounded-2xl px-10 font-black tracking-widest">
+                           DOWNLOAD DATA
+                        </a>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
             
             <div className="p-4 bg-base-300/50 flex items-center justify-between text-[10px] font-black tracking-widest opacity-30 px-8 uppercase">
                <span>Object MIME: {preview.type}</span>
-               <span>Shogun IPFS Node v1.2.0</span>
+               <span>Shogun IPFS Node v1.3.1</span>
             </div>
           </div>
           <form method="dialog" className="modal-backdrop">

@@ -3,6 +3,7 @@ import http from "http";
 import { loggers } from "../../utils/logger";
 import type { CustomRequest, IpfsRequestOptions } from "./types";
 import { IPFS_API_TOKEN, getContentTypeFromExtension, detectContentType } from "./utils";
+import { getSystemHash } from "../../utils/system-hashes-store";
 
 const MAX_JSON_SIZE = 5 * 1024 * 1024; // 5MB maximum size for parsing JSON into memory
 
@@ -282,54 +283,109 @@ router.post("/api/:endpoint(*)", async (req: CustomRequest, res: Response) => {
 });
 
 /**
+ * Helper to stream IPFS content with proper Content-Type and Content-Disposition
+ */
+async function streamIpfsContent(cid: string, req: Request, res: Response) {
+  const isDownload = req.query.download === "true" || req.query.dl === "true";
+  loggers.server.debug({ cid, isDownload }, `📄 IPFS Content streaming request`);
+
+  const meta = await getSystemHash(cid);
+  const filename = meta?.fileName || meta?.displayName || meta?.originalName || cid;
+  let contentType = meta?.contentType || (meta?.fileName ? getContentTypeFromExtension(meta.fileName) : "");
+
+  const requestOptions: IpfsRequestOptions = {
+    hostname: "127.0.0.1",
+    port: 5001,
+    path: `/api/v0/cat?arg=${encodeURIComponent(cid)}`,
+    method: "POST",
+    headers: { "Content-Length": "0" },
+  };
+
+  if (IPFS_API_TOKEN) {
+    requestOptions.headers["Authorization"] = `Bearer ${IPFS_API_TOKEN}`;
+  }
+
+  const ipfsReq = http.request(requestOptions, (ipfsRes) => {
+    if (ipfsRes.statusCode && ipfsRes.statusCode >= 400) {
+      let errData = "";
+      ipfsRes.on("data", (c) => (errData += c));
+      ipfsRes.on("end", () => {
+        if (!res.headersSent) {
+          res.status(ipfsRes.statusCode || 500).json({
+            success: false,
+            error: errData || `IPFS error: ${ipfsRes.statusCode}`,
+          });
+        }
+      });
+      return;
+    }
+
+    const disposition = isDownload ? "attachment" : "inline";
+    res.setHeader(
+      "Content-Disposition",
+      `${disposition}; filename="${encodeURIComponent(filename)}"`
+    );
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+
+    // If content type is known and specific, stream directly
+    if (contentType && contentType !== "application/octet-stream") {
+      res.setHeader("Content-Type", contentType);
+      ipfsRes.pipe(res);
+    } else {
+      // Sniff first chunk to detect MIME type from magic bytes
+      let firstChunkReceived = false;
+      ipfsRes.on("data", (chunk: Buffer) => {
+        if (!firstChunkReceived) {
+          firstChunkReceived = true;
+          const detected = detectContentType(chunk);
+          contentType =
+            detected !== "application/octet-stream"
+              ? detected
+              : getContentTypeFromExtension(filename);
+          res.setHeader("Content-Type", contentType);
+        }
+        res.write(chunk);
+      });
+      ipfsRes.on("end", () => {
+        if (!firstChunkReceived) {
+          res.setHeader("Content-Type", contentType || "application/octet-stream");
+        }
+        res.end();
+      });
+    }
+
+    ipfsRes.on("error", (err) => {
+      loggers.server.error({ err, cid }, `❌ IPFS Content stream error`);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: err.message });
+      }
+    });
+  });
+
+  ipfsReq.on("error", (err) => {
+    loggers.server.error({ err, cid }, `❌ IPFS Content request error`);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  ipfsReq.setTimeout(30000, () => {
+    ipfsReq.destroy();
+    if (!res.headersSent) {
+      res.status(408).json({ success: false, error: "Content retrieval timeout" });
+    }
+  });
+
+  ipfsReq.end();
+}
+
+/**
  * IPFS Cat endpoint (aligned with Kubo's /api/v0/cat)
  */
 router.get("/cat/:cid", async (req, res) => {
   try {
     const { cid } = req.params;
-    loggers.server.debug({ cid }, `📄 IPFS Content request`);
-
-    const requestOptions: IpfsRequestOptions = {
-      hostname: "127.0.0.1",
-      port: 5001,
-      path: `/api/v0/cat?arg=${cid}`,
-      method: "POST",
-      headers: { "Content-Length": "0" },
-    };
-
-    if (IPFS_API_TOKEN) {
-      requestOptions.headers["Authorization"] = `Bearer ${IPFS_API_TOKEN}`;
-    }
-
-    const ipfsReq = http.request(requestOptions, (ipfsRes) => {
-      res.setHeader("Content-Type", "application/octet-stream");
-      res.setHeader("Content-Disposition", `attachment; filename="${cid}"`);
-      res.setHeader("Cache-Control", "public, max-age=31536000");
-      ipfsRes.pipe(res);
-
-      ipfsRes.on("error", (err) => {
-        loggers.server.error({ err, cid }, `❌ IPFS Content error`);
-        if (!res.headersSent) {
-          res.status(500).json({ success: false, error: err.message });
-        }
-      });
-    });
-
-    ipfsReq.on("error", (err) => {
-      loggers.server.error({ err, cid }, `❌ IPFS Content request error`);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, error: err.message });
-      }
-    });
-
-    ipfsReq.setTimeout(30000, () => {
-      ipfsReq.destroy();
-      if (!res.headersSent) {
-        res.status(408).json({ success: false, error: "Content retrieval timeout" });
-      }
-    });
-
-    ipfsReq.end();
+    await streamIpfsContent(cid, req, res);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     loggers.server.error({ err: error, cid: req.params.cid }, `❌ IPFS Content error`);
@@ -341,51 +397,9 @@ router.get("/cat/:cid", async (req, res) => {
  * Compatibility endpoint for shogun-ipfs: /content/:cid
  */
 router.get("/content/:cid", async (req, res) => {
-  const { cid } = req.params;
-  loggers.server.debug({ cid }, `📄 IPFS Content (compatibility endpoint) request`);
-
   try {
-    const requestOptions: IpfsRequestOptions = {
-      hostname: "127.0.0.1",
-      port: 5001,
-      path: `/api/v0/cat?arg=${cid}`,
-      method: "POST",
-      headers: { "Content-Length": "0" },
-    };
-
-    if (IPFS_API_TOKEN) {
-      requestOptions.headers["Authorization"] = `Bearer ${IPFS_API_TOKEN}`;
-    }
-
-    const ipfsReq = http.request(requestOptions, (ipfsRes) => {
-      res.setHeader("Content-Type", "application/octet-stream");
-      res.setHeader("Content-Disposition", `attachment; filename="${cid}"`);
-      res.setHeader("Cache-Control", "public, max-age=31536000");
-      ipfsRes.pipe(res);
-
-      ipfsRes.on("error", (err) => {
-        loggers.server.error({ err, cid }, `❌ IPFS Content error`);
-        if (!res.headersSent) {
-          res.status(500).json({ success: false, error: err.message });
-        }
-      });
-    });
-
-    ipfsReq.on("error", (err) => {
-      loggers.server.error({ err, cid }, `❌ IPFS Content request error`);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, error: err.message });
-      }
-    });
-
-    ipfsReq.setTimeout(30000, () => {
-      ipfsReq.destroy();
-      if (!res.headersSent) {
-        res.status(408).json({ success: false, error: "Content retrieval timeout" });
-      }
-    });
-
-    ipfsReq.end();
+    const { cid } = req.params;
+    await streamIpfsContent(cid, req, res);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     loggers.server.error({ err: error, cid: req.params.cid }, `❌ IPFS Content error`);

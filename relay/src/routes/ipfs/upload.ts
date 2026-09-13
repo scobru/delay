@@ -4,6 +4,8 @@ import FormData from "form-data";
 import { loggers } from "../../utils/logger";
 import { ipfsUpload } from "../../utils/ipfs-client";
 import { adminOrApiKeyAuthMiddleware } from "../../middleware/admin-or-api-key-auth";
+import { saveSystemHash, SystemHashMetadata } from "../../utils/system-hashes-store";
+import { getContentTypeFromExtension } from "./utils";
 
 const router: Router = Router();
 
@@ -28,9 +30,27 @@ router.post(
         return res.status(400).json({ success: false, error: "No file provided" });
       }
 
+      // Read custom filename if provided
+      const rawCustomName = (
+        (req.body.customName as string) ||
+        (req.body.fileName as string) ||
+        req.file.originalname
+      ).trim();
+
+      let finalName = rawCustomName || req.file.originalname;
+      // Preserve extension if user provided a custom name without extension
+      if (
+        rawCustomName &&
+        !rawCustomName.includes(".") &&
+        req.file.originalname.includes(".")
+      ) {
+        const ext = req.file.originalname.split(".").pop();
+        if (ext) finalName = `${rawCustomName}.${ext}`;
+      }
+
       const formData = new FormData();
       formData.append("file", req.file.buffer, {
-        filename: req.file.originalname,
+        filename: finalName,
         contentType: req.file.mimetype,
       });
 
@@ -42,17 +62,48 @@ router.post(
 
       loggers.server.debug({ fileResult }, "📤 IPFS Upload response");
 
+      const cid = fileResult.Hash || fileResult.cid;
+      const isEncrypted = req.body.isEncrypted === "true" || finalName.endsWith(".enc");
+      const contentType = req.file.mimetype || getContentTypeFromExtension(finalName);
+
+      // Persist metadata in system-hashes store
+      const metadata: SystemHashMetadata = {
+        hash: cid,
+        userAddress: (req.body.userAddress as string) || "admin-upload",
+        timestamp: Date.now(),
+        fileName: finalName,
+        displayName: finalName,
+        originalName: req.file.originalname,
+        fileSize: req.file.size,
+        contentType,
+        isDirectory: false,
+        isEncrypted,
+        fileCount: 1,
+      };
+
+      try {
+        await saveSystemHash(metadata);
+      } catch (saveErr) {
+        loggers.server.warn({ err: saveErr }, "⚠️ Could not auto-save metadata in system-hashes-store");
+      }
+
       const uploadData = {
-        name: req.file.originalname,
+        name: finalName,
+        displayName: finalName,
+        originalName: req.file.originalname,
         size: req.file.size,
-        mimetype: req.file.mimetype,
-        hash: fileResult.Hash,
+        mimetype: contentType,
+        hash: cid,
+        cid: cid,
         sizeBytes: fileResult.Size,
         uploadedAt: Date.now(),
+        isDirectory: false,
       };
 
       res.json({
         success: true,
+        cid: cid,
+        hash: cid,
         file: uploadData,
       });
     } catch (error: unknown) {

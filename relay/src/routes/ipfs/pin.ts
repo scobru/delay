@@ -4,6 +4,7 @@ import { loggers } from "../../utils/logger";
 import { authConfig } from "../../config";
 import { IPFS_API_TOKEN } from "./utils";
 import type { IpfsRequestOptions } from "./types";
+import { getSystemHashesMap, removeSystemHash } from "../../utils/system-hashes-store";
 
 const router: Router = Router();
 
@@ -115,11 +116,16 @@ router.post("/pin/rm", adminOrApiKeyAuthMiddleware, async (req, res) => {
         loggers.server.debug({ chunk: chunk.toString() }, `📡 IPFS API data chunk`);
       });
 
-      ipfsRes.on("end", () => {
+      ipfsRes.on("end", async () => {
         loggers.server.debug({ data }, `📡 IPFS API complete response`);
 
         try {
           const result = JSON.parse(data);
+          try {
+            await removeSystemHash(cid);
+          } catch (e) {
+            loggers.server.warn({ err: e, cid }, "Failed to remove metadata on pin rm");
+          }
           loggers.server.info({ cid, result }, `✅ IPFS Pin rm success`);
           res.json({ success: true, message: "CID unpinned successfully", result });
         } catch (parseError) {
@@ -192,10 +198,15 @@ router.post("/pins/rm", adminOrApiKeyAuthMiddleware, async (req, res) => {
     const ipfsReq = http.request(requestOptions, (ipfsRes) => {
       let data = "";
       ipfsRes.on("data", (chunk) => (data += chunk));
-      ipfsRes.on("end", () => {
+      ipfsRes.on("end", async () => {
         if (ipfsRes.statusCode === 200) {
           try {
             const result = JSON.parse(data);
+            try {
+              await removeSystemHash(cid);
+            } catch (e) {
+              loggers.server.warn({ err: e, cid }, "Failed to remove metadata on pins rm");
+            }
             loggers.server.info({ cid, result }, `✅ IPFS Pin rm (alias /pins/rm) success`);
             res.json({
               success: true,
@@ -264,13 +275,35 @@ router.get("/pin/ls", adminOrApiKeyAuthMiddleware, async (req, res) => {
     const ipfsReq = http.request(requestOptions, (ipfsRes) => {
       let data = "";
       ipfsRes.on("data", (chunk) => (data += chunk));
-      ipfsRes.on("end", () => {
+      ipfsRes.on("end", async () => {
         try {
           const result = JSON.parse(data);
+          const rawPins = result.Keys || {};
+          let systemHashes: Record<string, any> = {};
+          try {
+            systemHashes = await getSystemHashesMap();
+          } catch (e) {
+            loggers.server.warn({ err: e }, "Failed to fetch system hashes for pin ls enrichment");
+          }
+
+          const enrichedPins: Record<string, any> = {};
+          for (const [cid, info] of Object.entries(rawPins)) {
+            const meta = systemHashes[cid] || {};
+            enrichedPins[cid] = {
+              ...(info as any),
+              Name: meta.displayName || meta.fileName || meta.originalName || undefined,
+              Size: meta.fileSize,
+              isDirectory: meta.isDirectory,
+              contentType: meta.contentType,
+              timestamp: meta.timestamp,
+              metadata: meta,
+            };
+          }
+
           res.json({
             success: true,
-            pins: result.Keys || {},
-            count: Object.keys(result.Keys || {}).length,
+            pins: enrichedPins,
+            count: Object.keys(enrichedPins).length,
           });
         } catch (parseError) {
           res

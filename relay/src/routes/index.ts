@@ -60,6 +60,7 @@ import visualGraphRouter from "./visualGraph";
 // torrentRouter removed
 import authRouter from "./auth";
 import networkRouter from "./network";
+import userUploadsRouter from "./user-uploads";
 
 import { ipfsRequest } from "../utils/ipfs-client";
 import { generateOpenAPISpec } from "../utils/openapi-generator";
@@ -563,6 +564,9 @@ export default async (app: express.Application) => {
 
   // API Keys (stateless admin keys)
   app.use(`${baseRoute}/api-keys`, tokenAuthMiddleware, apiKeysRouter);
+
+  // User Uploads & Metadata Map
+  app.use(`${baseRoute}/user-uploads`, tokenAuthMiddleware, userUploadsRouter);
 
   // Route per IPFS (conditional)
   if (ipfsConfig.enabled) {
