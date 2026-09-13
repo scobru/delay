@@ -19,7 +19,128 @@ interface PreviewState {
   blob?: Blob
   url?: string
   isDirectory?: boolean
+  isDecrypted?: boolean
+  originalName?: string
   files?: Array<{ name: string; path: string; size?: number; mimetype?: string }>
+}
+
+interface DecryptModalState {
+  pin: Pin
+  mode: 'preview' | 'download'
+}
+
+const isEncryptedPin = (pin: Pin): boolean => {
+  return !!(
+    pin.metadata?.isEncrypted === true ||
+    pin.name?.toLowerCase().endsWith('.enc') ||
+    pin.metadata?.fileName?.toLowerCase().endsWith('.enc')
+  )
+}
+
+const getCleanDecryptedName = (name: string): string => {
+  if (name.toLowerCase().endsWith('.enc')) {
+    return name.slice(0, -4)
+  }
+  return name
+}
+
+const detectMimeFromBytes = (bytes: Uint8Array): string | null => {
+  if (bytes.length < 4) return null
+  // PNG: 89 50 4E 47
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return 'image/png'
+  }
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg'
+  }
+  // GIF: 47 49 46 38 ('GIF8')
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
+    return 'image/gif'
+  }
+  // PDF: 25 50 44 46 ('%PDF')
+  if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+    return 'application/pdf'
+  }
+  // WebP: RIFF....WEBP
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return 'image/webp'
+  }
+  // MP4: offset 4: 'ftyp' (66 74 79 70)
+  if (
+    bytes.length >= 8 &&
+    bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70
+  ) {
+    return 'video/mp4'
+  }
+  // WebM / Matroska: 1A 45 DF A3
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
+    return 'video/webm'
+  }
+  // MP3: ID3 (49 44 33) or FF FB
+  if (
+    (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) ||
+    (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)
+  ) {
+    return 'audio/mpeg'
+  }
+  // WAV: RIFF....WAVE
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x41 && bytes[10] === 0x56 && bytes[11] === 0x45
+  ) {
+    return 'audio/wav'
+  }
+  // OGG: OggS (4F 67 67 53)
+  if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
+    return 'audio/ogg'
+  }
+  return null
+}
+
+const isTextOrJson = (bytes: Uint8Array): 'application/json' | 'text/plain' | null => {
+  try {
+    const sample = new TextDecoder('utf-8', { fatal: true }).decode(bytes.slice(0, Math.min(bytes.length, 4096)))
+    const trimmed = sample.trim()
+    if ((trimmed.startsWith('{') && trimmed.includes('}')) || (trimmed.startsWith('[') && trimmed.includes(']'))) {
+      return 'application/json'
+    }
+    let printable = 0
+    for (let i = 0; i < sample.length; i++) {
+      const code = sample.charCodeAt(i)
+      if (code === 9 || code === 10 || code === 13 || (code >= 32 && code !== 127)) {
+        printable++
+      }
+    }
+    if (sample.length > 0 && printable / sample.length > 0.9) {
+      return 'text/plain'
+    }
+  } catch {
+    // not valid utf-8
+  }
+  return null
+}
+
+const resolveDecryptedMime = (cleanName: string, buffer: ArrayBuffer, pinMetadata?: any): string => {
+  const magicMime = detectMimeFromBytes(new Uint8Array(buffer))
+  if (magicMime) return magicMime
+
+  const extMime = getMimeFromFilename(cleanName)
+  if (extMime && extMime !== 'application/octet-stream') return extMime
+
+  if (pinMetadata?.contentType && pinMetadata.contentType !== 'application/octet-stream') {
+    return pinMetadata.contentType
+  }
+
+  const textMime = isTextOrJson(new Uint8Array(buffer))
+  if (textMime) return textMime
+
+  return 'application/octet-stream'
 }
 
 const getMimeFromFilename = (filename: string): string => {
@@ -78,8 +199,16 @@ function Files() {
   const [filterType, setFilterType] = useState('all')
   const [uploadMode, setUploadMode] = useState<'single' | 'directory'>('single')
   const [encryptUpload, setEncryptUpload] = useState(false)
+  const [uploadPassword, setUploadPassword] = useState('')
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const [fileNameOverride, setFileNameOverride] = useState('')
+
+  // Decrypt modal state
+  const [decryptModal, setDecryptModal] = useState<DecryptModalState | null>(null)
+  const [decryptPassword, setDecryptPassword] = useState('')
+  const [showDecryptPassword, setShowDecryptPassword] = useState(false)
+  const [isDecrypting, setIsDecrypting] = useState(false)
+  const [decryptError, setDecryptError] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dirInputRef = useRef<HTMLInputElement>(null)
@@ -147,6 +276,7 @@ function Files() {
   // --- Icon Helper ---
   const getFileIcon = (pin: Pin): string => {
     if (pin.type === 'directory' || pin.metadata?.isDirectory) return '📁'
+    if (isEncryptedPin(pin)) return '🔒'
     const mime = (pin.metadata?.contentType || '').toLowerCase()
     const name = (pin.name || '').toLowerCase()
     if (mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(name)) return '🖼️'
@@ -154,11 +284,10 @@ function Files() {
     if (mime.startsWith('audio/') || /\.(mp3|wav|ogg|flac|m4a)$/i.test(name)) return '🎵'
     if (mime === 'application/pdf' || name.endsWith('.pdf')) return '📕'
     if (mime.startsWith('text/') || /\.(txt|md|json|csv|js|ts|html|css)$/i.test(name)) return '📄'
-    if (pin.metadata?.isEncrypted) return '🔒'
     return '📄'
   }
 
-  // --- Encryption ---
+  // --- Encryption & Decryption ---
   const deriveKey = async (password: string, salt: Uint8Array) => {
     const enc = new TextEncoder()
     const keyMaterial = await window.crypto.subtle.importKey(
@@ -186,6 +315,20 @@ function Files() {
     combined.set(iv, salt.length)
     combined.set(new Uint8Array(encrypted), salt.length + iv.length)
     return combined
+  }
+
+  const decryptData = async (data: ArrayBuffer, password: string): Promise<ArrayBuffer> => {
+    const bytes = new Uint8Array(data)
+    if (bytes.length < 16 + 12 + 16) {
+      throw new Error("File too short to be a valid encrypted file")
+    }
+    const salt = bytes.slice(0, 16)
+    const iv = bytes.slice(16, 28)
+    const ciphertext = bytes.slice(28)
+    const key = await deriveKey(password, salt)
+    return await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv }, key, ciphertext
+    )
   }
 
   // --- Upload Handler ---
@@ -218,9 +361,10 @@ function Files() {
         if (encryptUpload) {
           setStatusMessage('Encrypting...')
           const buffer = await file.arrayBuffer()
-          if (!token) throw new Error("Authentication required for encryption")
+          const passToUse = uploadPassword.trim() || token
+          if (!passToUse) throw new Error("Authentication or encryption password required")
           
-          const encryptedBytes = await encryptData(buffer, token)
+          const encryptedBytes = await encryptData(buffer, passToUse)
           const encryptedBlob = new Blob([encryptedBytes], { type: 'application/octet-stream' })
           file = new File([encryptedBlob], name + '.enc', { type: 'application/octet-stream' })
           uploadFileName = name + '.enc'
@@ -256,6 +400,7 @@ function Files() {
           setStatusMessage(`✅ Upload complete: ${uploadFileName || (uploadMode === 'directory' ? 'Directory' : 'File')}`)
           await saveMetadata(result, files, uploadMode === 'directory', uploadFileName)
           setFileNameOverride('')
+          setUploadPassword('')
           if (fileInputRef.current) fileInputRef.current.value = ''
           if (dirInputRef.current) dirInputRef.current.value = ''
           fetchPins()
@@ -315,8 +460,8 @@ function Files() {
     }
   }
 
-  // --- Direct Download Action ---
-  const handleDownload = async (pin: Pin) => {
+  // --- Direct / Raw Download Action ---
+  const executeRawDownload = async (pin: Pin) => {
     try {
       setStatusMessage(`Downloading ${pin.name}...`)
       const res = await fetch(`/api/v1/ipfs/cat/${pin.cid}?download=true`, { headers: getAuthHeaders() })
@@ -332,26 +477,26 @@ function Files() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       setStatusMessage(`✅ Downloaded: ${downloadFilename}`)
+      if (decryptModal) setDecryptModal(null)
       setTimeout(() => setStatusMessage(''), 3000)
     } catch (e: any) {
       setStatusMessage(`❌ Download error: ${e.message}`)
     }
   }
 
-  // --- Preview Logic ---
-  const handlePreview = async (pin: Pin) => {
-    try {
-      if (pin.type === 'directory' || pin.metadata?.isDirectory) {
-        setPreview({
-          cid: pin.cid,
-          name: pin.name,
-          type: 'application/directory',
-          isDirectory: true,
-          files: pin.metadata?.files || []
-        })
-        return
-      }
+  const handleDownload = async (pin: Pin) => {
+    if (isEncryptedPin(pin)) {
+      setDecryptModal({ pin, mode: 'download' })
+      setDecryptPassword('')
+      setDecryptError('')
+      return
+    }
+    await executeRawDownload(pin)
+  }
 
+  // --- Direct / Raw Preview Logic ---
+  const executeRawPreview = async (pin: Pin) => {
+    try {
       setStatusMessage('Loading preview...')
       const res = await fetch(`/api/v1/ipfs/cat/${pin.cid}`, { headers: getAuthHeaders() })
       if (!res.ok) throw new Error('Failed to fetch content')
@@ -376,6 +521,89 @@ function Files() {
       setStatusMessage('')
     } catch (e: any) {
       setStatusMessage(`Preview failed: ${e.message}`)
+    }
+  }
+
+  const handlePreview = async (pin: Pin) => {
+    if (pin.type === 'directory' || pin.metadata?.isDirectory) {
+      setPreview({
+        cid: pin.cid,
+        name: pin.name,
+        type: 'application/directory',
+        isDirectory: true,
+        files: pin.metadata?.files || []
+      })
+      return
+    }
+
+    if (isEncryptedPin(pin)) {
+      setDecryptModal({ pin, mode: 'preview' })
+      setDecryptPassword('')
+      setDecryptError('')
+      return
+    }
+
+    await executeRawPreview(pin)
+  }
+
+  // --- Execute Decrypt Action (Preview or Download) ---
+  const handleExecuteDecrypt = async () => {
+    if (!decryptModal || !decryptPassword.trim()) return
+    setIsDecrypting(true)
+    setDecryptError('')
+    const { pin, mode } = decryptModal
+
+    try {
+      setStatusMessage(`Fetching encrypted data for ${pin.name}...`)
+      const res = await fetch(`/api/v1/ipfs/cat/${pin.cid}`, { headers: getAuthHeaders() })
+      if (!res.ok) throw new Error(`Failed to fetch file from IPFS (${res.statusText})`)
+
+      const encryptedBuffer = await res.arrayBuffer()
+      setStatusMessage(`Decrypting ${pin.name}...`)
+
+      let decryptedBuffer: ArrayBuffer
+      try {
+        decryptedBuffer = await decryptData(encryptedBuffer, decryptPassword.trim())
+      } catch (decryptErr) {
+        throw new Error('Decryption failed: Incorrect password or corrupted file.')
+      }
+
+      const cleanName = getCleanDecryptedName(pin.name)
+      const mime = resolveDecryptedMime(cleanName, decryptedBuffer, pin.metadata)
+      const blob = new Blob([decryptedBuffer], { type: mime })
+
+      if (mode === 'preview') {
+        const url = URL.createObjectURL(blob)
+        setPreview({
+          cid: pin.cid,
+          name: cleanName,
+          type: mime,
+          blob,
+          url,
+          isDirectory: false,
+          isDecrypted: true,
+          originalName: pin.name
+        })
+        setStatusMessage(`✅ Decrypted successfully: ${cleanName}`)
+        setDecryptModal(null)
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = cleanName
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        setStatusMessage(`✅ Decrypted and downloaded: ${cleanName}`)
+        setDecryptModal(null)
+        setTimeout(() => setStatusMessage(''), 3000)
+      }
+    } catch (err: any) {
+      setDecryptError(err.message || 'Decryption failed')
+      setStatusMessage(`❌ ${err.message}`)
+    } finally {
+      setIsDecrypting(false)
     }
   }
 
@@ -569,6 +797,20 @@ function Files() {
                      />
                      <span className="text-xs font-bold opacity-60 group-hover:opacity-100 transition-opacity uppercase tracking-widest">Enable AES-GCM Encryption</span>
                    </label>
+                   {encryptUpload && (
+                     <div className="flex flex-col gap-1.5 w-full animate-in fade-in duration-200">
+                       <input 
+                         type="password" 
+                         className="input input-bordered bg-base-100/50 border-base-content/10 focus:border-primary w-full text-center font-medium text-xs rounded-xl" 
+                         placeholder="Encryption password (leave empty to use admin token)" 
+                         value={uploadPassword}
+                         onChange={e => setUploadPassword(e.target.value)}
+                       />
+                       <span className="text-[10px] opacity-40 text-center uppercase tracking-wider font-mono">
+                         Required to preview or download decrypted
+                       </span>
+                     </div>
+                   )}
                  </div>
                )}
                
@@ -677,10 +919,15 @@ function Files() {
                           ✏️
                         </button>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded bg-base-300 uppercase tracking-tight ${pin.type === 'directory' ? 'text-secondary' : 'text-primary'}`}>
                            {pin.type === 'directory' ? 'DIRECTORY' : 'FILE'}
                          </span>
+                         {isEncryptedPin(pin) && (
+                           <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-warning/20 text-warning uppercase tracking-tight flex items-center gap-1">
+                             🔒 ENCRYPTED
+                           </span>
+                         )}
                          <span className="text-[10px] font-medium opacity-40 font-mono truncate tracking-tighter">{pin.cid}</span>
                       </div>
                     </div>
@@ -699,10 +946,10 @@ function Files() {
                 </div>
                 
                 <div className="bg-base-300/30 p-3 flex gap-2 justify-end items-center">
-                  <button className="btn btn-ghost btn-xs rounded-lg hover:bg-primary/10 hover:text-primary" onClick={() => handlePreview(pin)} title="Preview Content">
+                  <button className="btn btn-ghost btn-xs rounded-lg hover:bg-primary/10 hover:text-primary" onClick={() => handlePreview(pin)} title={isEncryptedPin(pin) ? "Decrypt & Preview Content" : "Preview Content"}>
                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                   </button>
-                  <button className="btn btn-ghost btn-xs rounded-lg hover:bg-success/10 hover:text-success" onClick={() => handleDownload(pin)} title="Download File">
+                  <button className="btn btn-ghost btn-xs rounded-lg hover:bg-success/10 hover:text-success" onClick={() => handleDownload(pin)} title={isEncryptedPin(pin) ? "Decrypt & Download File" : "Download File"}>
                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                   </button>
                   <button className="btn btn-ghost btn-xs rounded-lg hover:bg-info/10 hover:text-info" onClick={() => {
@@ -722,6 +969,122 @@ function Files() {
           </div>
         )}
       </div>
+
+      {/* Decrypt Password Modal */}
+      {decryptModal && (
+        <dialog className="modal modal-open backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="modal-box glass-card rounded-3xl p-6 border-white/20 shadow-2xl max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-warning/20 text-warning flex items-center justify-center text-xl font-bold">
+                🔒
+              </div>
+              <div>
+                <h3 className="font-black text-lg leading-tight">
+                  {decryptModal.mode === 'preview' ? 'Decrypt & Preview' : 'Decrypt & Download'}
+                </h3>
+                <p className="text-xs opacity-50 font-mono truncate max-w-[280px]">
+                  {decryptModal.pin.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-base-300/30 rounded-2xl p-4 mb-4 flex flex-col gap-2 border border-base-content/5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="opacity-50">CID</span>
+                <span className="font-mono text-[11px] opacity-70 truncate max-w-[200px]">{decryptModal.pin.cid}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="opacity-50">Encrypted Size</span>
+                <span className="font-bold opacity-70">{formatBytes(decryptModal.pin.size || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="opacity-50">Decrypted Target</span>
+                <span className="font-bold text-primary truncate max-w-[200px]">{getCleanDecryptedName(decryptModal.pin.name)}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 mb-4">
+              <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider opacity-60">
+                <span>Enter Decryption Password</span>
+                {adminToken && (
+                  <button 
+                    type="button" 
+                    className="text-[10px] text-primary hover:underline font-normal normal-case"
+                    onClick={() => { setDecryptPassword(adminToken); setDecryptError('') }}
+                  >
+                    Use Admin Token
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <input 
+                  type={showDecryptPassword ? 'text' : 'password'}
+                  className="input input-bordered w-full bg-base-100/50 pr-10 font-medium text-sm" 
+                  placeholder="Enter password..." 
+                  value={decryptPassword} 
+                  onChange={e => { setDecryptPassword(e.target.value); setDecryptError('') }}
+                  onKeyDown={e => { if (e.key === 'Enter') handleExecuteDecrypt() }}
+                  autoFocus
+                />
+                <button 
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-100 transition-opacity text-xs"
+                  onClick={() => setShowDecryptPassword(!showDecryptPassword)}
+                >
+                  {showDecryptPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
+
+            {decryptError && (
+              <div className="alert alert-error text-xs py-2 px-3 rounded-xl mb-4 font-bold flex items-center gap-2">
+                <span>⚠️ {decryptError}</span>
+              </div>
+            )}
+
+            <div className="modal-action flex items-center justify-between mt-6">
+              <div>
+                {decryptModal.mode === 'download' && (
+                  <button 
+                    type="button" 
+                    className="btn btn-ghost btn-xs text-xs opacity-60 hover:opacity-100"
+                    onClick={() => executeRawDownload(decryptModal.pin)}
+                    title="Download original encrypted file without decrypting"
+                  >
+                    Download Raw (.enc)
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  className="btn btn-ghost btn-sm" 
+                  onClick={() => { setDecryptModal(null); setDecryptError('') }}
+                  disabled={isDecrypting}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary btn-sm font-bold gap-1" 
+                  onClick={handleExecuteDecrypt} 
+                  disabled={isDecrypting || !decryptPassword.trim()}
+                >
+                  {isDecrypting ? (
+                    <>
+                      <span className="loading loading-spinner loading-xs"></span>
+                      Decrypting...
+                    </>
+                  ) : (
+                    decryptModal.mode === 'preview' ? '🔓 Decrypt & Preview' : '🔓 Decrypt & Download'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button onClick={() => { if (!isDecrypting) setDecryptModal(null) }}>close</button>
+          </form>
+        </dialog>
+      )}
 
       {/* Rename Modal */}
       {editingPin && (
@@ -757,16 +1120,33 @@ function Files() {
             <div className="flex justify-between items-center p-6 bg-base-300/50 border-b border-base-content/5">
               <div className="flex items-center gap-4">
                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl">
-                   {preview.isDirectory ? '📁' : '🔍'}
+                   {preview.isDirectory ? '📁' : preview.isDecrypted ? '🔓' : '🔍'}
                  </div>
                  <div>
-                    <h3 className="font-black text-lg truncate leading-none mb-1">{preview.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-lg truncate leading-none mb-1">{preview.name}</h3>
+                      {preview.isDecrypted && (
+                        <span className="badge badge-success badge-sm font-bold text-[10px] text-white">DECRYPTED</span>
+                      )}
+                    </div>
                     <p className="text-[10px] font-mono opacity-40 leading-none">{preview.cid}</p>
                  </div>
               </div>
-              <button className="btn btn-circle btn-sm btn-ghost hover:bg-error/10 hover:text-error" onClick={closePreview}>
-                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              </button>
+              <div className="flex items-center gap-2">
+                {preview.url && !preview.isDirectory && (
+                  <a 
+                    href={preview.url} 
+                    download={preview.name && preview.name !== 'Unnamed' ? preview.name : preview.cid} 
+                    className="btn btn-circle btn-sm btn-ghost hover:bg-success/10 hover:text-success"
+                    title={preview.isDecrypted ? "Download Decrypted File" : "Download File"}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                  </a>
+                )}
+                <button className="btn btn-circle btn-sm btn-ghost hover:bg-error/10 hover:text-error" onClick={closePreview}>
+                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </div>
             </div>
             
             <div className="p-8 flex justify-center bg-base-100/30">
@@ -820,11 +1200,17 @@ function Files() {
                     )}
                     {!preview.type.match(/image|video|audio|pdf|text|json/) && (
                       <div className="text-center py-20 px-10">
-                        <div className="text-6xl mb-6">📦</div>
-                        <h4 className="font-black text-xl uppercase tracking-widest opacity-30 mb-2">Binary Object</h4>
-                        <p className="text-sm opacity-30 mb-8 max-w-xs mx-auto">This object type cannot be rendered inline in the browser.</p>
+                        <div className="text-6xl mb-6">{preview.isDecrypted ? '🔓' : '📦'}</div>
+                        <h4 className="font-black text-xl uppercase tracking-widest opacity-30 mb-2">
+                          {preview.isDecrypted ? 'Decrypted Binary Object' : 'Binary Object'}
+                        </h4>
+                        <p className="text-sm opacity-30 mb-8 max-w-xs mx-auto">
+                          {preview.isDecrypted 
+                            ? 'The file was successfully decrypted, but this format cannot be rendered inline in the browser.'
+                            : 'This object type cannot be rendered inline in the browser.'}
+                        </p>
                         <a href={preview.url} download={preview.name && preview.name !== 'Unnamed' ? preview.name : preview.cid} className="btn gradient-primary border-0 rounded-2xl px-10 font-black tracking-widest">
-                           DOWNLOAD DATA
+                           {preview.isDecrypted ? 'DOWNLOAD DECRYPTED FILE' : 'DOWNLOAD DATA'}
                         </a>
                       </div>
                     )}
