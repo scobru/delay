@@ -6,6 +6,7 @@ import { ipfsUpload } from "../../utils/ipfs-client";
 import { adminOrApiKeyAuthMiddleware } from "../../middleware/admin-or-api-key-auth";
 import { saveSystemHash, SystemHashMetadata } from "../../utils/system-hashes-store";
 import { getContentTypeFromExtension } from "./utils";
+import { ipfsConfig } from "../../config/env-config";
 
 const router: Router = Router();
 
@@ -13,7 +14,7 @@ const router: Router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB limit
+    fileSize: ipfsConfig.maxFileSizeMB * 1024 * 1024,
   },
 });
 
@@ -55,7 +56,7 @@ router.post(
       });
 
       const fileResult = await ipfsUpload("/api/v0/add?wrap-with-directory=false", formData, {
-        timeout: 60000,
+        timeout: ipfsConfig.uploadTimeoutMs,
         maxRetries: 3,
         retryDelay: 1000,
       });

@@ -5,12 +5,13 @@ import { loggers } from "../../utils/logger";
 import { ipfsUpload } from "../../utils/ipfs-client";
 import { adminOrApiKeyAuthMiddleware } from "../../middleware/admin-or-api-key-auth";
 import { saveSystemHash, SystemHashMetadata } from "../../utils/system-hashes-store";
+import { ipfsConfig } from "../../config/env-config";
 
 const router: Router = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: ipfsConfig.maxFileSizeMB * 1024 * 1024 },
 });
 
 /**
@@ -52,7 +53,7 @@ router.post(
 
       loggers.server.debug(`Uploading ${files.length} files to IPFS with wrap-with-directory=true`);
       const directoryResult = await ipfsUpload("/api/v0/add?wrap-with-directory=true", formData, {
-        timeout: 120000,
+        timeout: Math.max(ipfsConfig.uploadTimeoutMs * 2, 120000),
         maxRetries: 3,
         retryDelay: 1000,
       });

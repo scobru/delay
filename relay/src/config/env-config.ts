@@ -75,6 +75,8 @@ export const config = {
     apiToken: process.env.IPFS_API_TOKEN,
     gatewayUrl: process.env.IPFS_GATEWAY_URL || "http://127.0.0.1:8080",
     pinTimeoutMs: parseInt(process.env.IPFS_PIN_TIMEOUT_MS || "120000") || 120000,
+    maxFileSizeMB: parseInt(process.env.IPFS_MAX_FILE_SIZE_MB || "100") || 100,
+    uploadTimeoutMs: parseInt(process.env.IPFS_UPLOAD_TIMEOUT_MS || "60000") || 60000,
     // Parsed IPFS API URL components
     apiHost: (() => {
       try {

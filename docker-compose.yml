@@ -53,6 +53,8 @@ services:
       - IPFS_GATEWAY_URL=http://127.0.0.1:8080
       - IPFS_API_TOKEN=shogun2025
       - IPFS_API_KEY=shogun2025
+      - IPFS_MAX_FILE_SIZE_MB=${IPFS_MAX_FILE_SIZE_MB:-100}
+      - IPFS_UPLOAD_TIMEOUT_MS=${IPFS_UPLOAD_TIMEOUT_MS:-60000}
       # - HOLSTER_RELAY_STORAGE_PATH=/app/relay/holster-data removed
 
       # ============================================================================
