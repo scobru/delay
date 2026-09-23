@@ -34,6 +34,12 @@ function Settings() {
   // Storage Stats State
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
   const [loadingStorage, setLoadingStorage] = useState(false);
+  const [clearingZen, setClearingZen] = useState(false);
+  const [showClearZenModal, setShowClearZenModal] = useState(false);
+  const [zenActionMessage, setZenActionMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Configuration State
   const [config, setConfig] = useState<ConfigData | null>(null);
@@ -60,6 +66,38 @@ function Settings() {
       setLoadingStorage(false);
     }
   }, [getAuthHeaders]);
+
+  const handleClearZenStorage = async () => {
+    setClearingZen(true);
+    setZenActionMessage(null);
+    try {
+      const res = await fetch("/api/v1/admin/zen-storage/clear", {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setZenActionMessage({
+          type: "success",
+          text: `Storage ZEN svuotato con successo (${data.filesDeleted ?? 0} file eliminati).`,
+        });
+        await fetchStorageStats();
+        setShowClearZenModal(false);
+      } else {
+        setZenActionMessage({
+          type: "error",
+          text: data.error || "Errore durante lo svuotamento dello storage ZEN",
+        });
+      }
+    } catch (e: any) {
+      setZenActionMessage({
+        type: "error",
+        text: e.message || "Errore di connessione",
+      });
+    } finally {
+      setClearingZen(false);
+    }
+  };
 
   const fetchConfig = useCallback(async () => {
     setLoadingConfig(true);
@@ -421,16 +459,35 @@ function Settings() {
                     </div>
                   </div>
 
-                  <div className="bg-base-200 p-3 rounded-lg">
-                    <div className="text-sm font-medium">🌊 ZEN (radata)</div>
-                    <div className="text-lg font-bold">
-                      {storageStats.breakdown.zen.formatted}
+                  <div className="bg-base-200 p-3 rounded-lg flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium">🌊 ZEN (radata)</div>
+                      <div className="text-lg font-bold">
+                        {storageStats.breakdown.zen.formatted}
+                      </div>
+                      <div className="text-xs text-base-content/60">
+                        {storageStats.breakdown.zen.files} files
+                      </div>
                     </div>
-                    <div className="text-xs text-base-content/60">
-                      {storageStats.breakdown.zen.files} files
-                    </div>
+                    <button
+                      className="btn btn-error btn-outline btn-xs"
+                      onClick={() => setShowClearZenModal(true)}
+                      title="Svuota storage ZEN"
+                    >
+                      🗑️ Svuota
+                    </button>
                   </div>
                 </div>
+
+                {zenActionMessage && (
+                  <div
+                    className={`alert ${
+                      zenActionMessage.type === "success" ? "alert-success" : "alert-error"
+                    } text-sm py-2`}
+                  >
+                    <span>{zenActionMessage.text}</span>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-base-content/50 text-sm">Failed to load storage stats</p>
@@ -482,6 +539,52 @@ function Settings() {
           </p>
         </div>
       </div>
+
+      {/* Modal di conferma svuotamento ZEN */}
+      {showClearZenModal && (
+        <div className="modal modal-open modal-bottom sm:modal-middle">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg text-error flex items-center gap-2">
+              ⚠️ Svuota Storage ZEN
+            </h3>
+            <p className="py-4 text-sm text-base-content/80">
+              Sei sicuro di voler eliminare tutti i dati e i blocchi memorizzati localmente da ZEN radisk?
+            </p>
+            {storageStats && (
+              <div className="bg-base-200 p-3 rounded-lg text-sm mb-4">
+                <div><strong>Dati correnti:</strong> {storageStats.breakdown.zen.formatted}</div>
+                <div><strong>File totali:</strong> {storageStats.breakdown.zen.files} file</div>
+              </div>
+            )}
+            <p className="text-xs text-warning">
+              I file cancellati non potranno essere recuperati localmente. ZEN ricomincerà con un database locale pulito.
+            </p>
+            <div className="modal-action">
+              <button
+                className="btn btn-ghost"
+                onClick={() => setShowClearZenModal(false)}
+                disabled={clearingZen}
+              >
+                Annulla
+              </button>
+              <button
+                className="btn btn-error"
+                onClick={handleClearZenStorage}
+                disabled={clearingZen}
+              >
+                {clearingZen ? (
+                  <>
+                    <span className="loading loading-spinner loading-xs"></span>
+                    Svuotamento...
+                  </>
+                ) : (
+                  "Conferma ed Elimina"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

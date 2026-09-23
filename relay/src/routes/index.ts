@@ -65,7 +65,7 @@ import userUploadsRouter from "./user-uploads";
 import { ipfsRequest } from "../utils/ipfs-client";
 import { generateOpenAPISpec } from "../utils/openapi-generator";
 import { loggers } from "../utils/logger";
-import { authConfig, ipfsConfig, packageConfig, relayConfig, zenConfig } from "../config";
+import { authConfig, ipfsConfig, packageConfig, relayConfig, storageConfig, zenConfig } from "../config";
 
 // Rate limiting generale
 const generalLimiter = rateLimit({
@@ -796,7 +796,7 @@ export default async (app: express.Application) => {
     tokenAuthMiddleware,
     async (req: Request, res: Response) => {
       try {
-        const dataDir = path.resolve(process.cwd(), "data");
+        const dataDir = storageConfig.dataDir || path.resolve(process.cwd(), "data");
         const radataDir = path.resolve(process.cwd(), "radata");
 
         // Helper function to get directory size
@@ -901,6 +901,104 @@ export default async (app: express.Application) => {
         res.status(500).json({
           success: false,
           error: error.message || "Internal server error",
+        });
+      }
+    }
+  );
+
+  /**
+   * POST /api/v1/admin/zen-storage/clear
+   * Clear all ZEN radisk storage on disk and reset in-memory graph
+   * Admin only - requires authentication
+   */
+  app.post(
+    `${baseRoute}/admin/zen-storage/clear`,
+    tokenAuthMiddleware,
+    async (req: Request, res: Response) => {
+      try {
+        const dataDir = storageConfig.dataDir || path.resolve(process.cwd(), "data");
+        const radataDir = path.resolve(process.cwd(), "radata");
+        const zenDir = path.resolve(zenConfig.dataDir || path.join(dataDir, "zendata"));
+        const legacyRadataInsideZen = path.join(zenDir, "radata");
+
+        // Target directories where Zen radisk files might be located
+        const candidateDirs = [
+          zenDir,
+          legacyRadataInsideZen,
+          radataDir,
+        ];
+
+        // Deduplicate directories
+        const uniqueDirs = Array.from(new Set(candidateDirs.map((d) => path.resolve(d))));
+        let totalFilesDeleted = 0;
+        let totalBytesFreed = 0;
+        const clearedPaths: string[] = [];
+
+        for (const dir of uniqueDirs) {
+          const exists = await fs.promises
+            .access(dir)
+            .then(() => true)
+            .catch(() => false);
+
+          if (!exists) continue;
+
+          // Helper to count bytes and files before deletion
+          const countAndRemove = async (targetPath: string) => {
+            try {
+              const stat = await fs.promises.stat(targetPath);
+              if (stat.isDirectory()) {
+                const entries = await fs.promises.readdir(targetPath);
+                for (const entry of entries) {
+                  await countAndRemove(path.join(targetPath, entry));
+                }
+                // Do not remove top-level candidate dir itself to preserve volume mounts
+                if (targetPath !== dir) {
+                  await fs.promises.rm(targetPath, { recursive: true, force: true });
+                }
+              } else {
+                totalBytesFreed += stat.size;
+                totalFilesDeleted++;
+                await fs.promises.rm(targetPath, { force: true });
+              }
+            } catch (e) {
+              // Ignore individual unremovable files
+            }
+          };
+
+          const items = await fs.promises.readdir(dir);
+          for (const item of items) {
+            await countAndRemove(path.join(dir, item));
+          }
+
+          // Ensure base directory remains in place for subsequent writes
+          await fs.promises.mkdir(dir, { recursive: true });
+          clearedPaths.push(dir);
+        }
+
+        // Reset in-memory Zen graph if instance is present
+        const zen = req.app.get("zenInstance");
+        if (zen && zen._ && zen._.graph) {
+          zen._.graph = {};
+        }
+
+        loggers.server.info(
+          { totalFilesDeleted, totalBytesFreed, clearedPaths },
+          "🧹 ZEN storage cleared successfully by admin"
+        );
+
+        res.json({
+          success: true,
+          message: "ZEN storage cleared successfully",
+          filesDeleted: totalFilesDeleted,
+          bytesFreed: totalBytesFreed,
+          clearedPaths,
+          timestamp: Date.now(),
+        });
+      } catch (error: any) {
+        loggers.server.error({ err: error }, "Failed to clear ZEN storage");
+        res.status(500).json({
+          success: false,
+          error: error.message || "Internal server error while clearing ZEN storage",
         });
       }
     }
