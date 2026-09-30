@@ -1221,7 +1221,7 @@ function Files() {
             
             <div className="p-4 bg-base-300/50 flex items-center justify-between text-[10px] font-black tracking-widest opacity-30 px-8 uppercase">
                <span>Object MIME: {preview.type}</span>
-               <span>Shogun IPFS Node v1.3.1</span>
+               <span>Delay IPFS Node v1.3.1</span>
             </div>
           </div>
           <form method="dialog" className="modal-backdrop">

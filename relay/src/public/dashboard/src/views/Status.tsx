@@ -84,7 +84,7 @@ function Status() {
             </div>
             <div>
               <h2 className="card-title text-3xl font-bold tracking-tight mb-1">
-                {health?.relayName || "Shogun Relay"}
+                {health?.relayName || "Delay Relay"}
               </h2>
               <p className="text-primary-content/70 max-w-md leading-relaxed">
                 Decentralized infrastructure powered by <span className="text-white font-semibold">ZenDB</span> & <span className="text-white font-semibold">IPFS</span>. Running efficiently on your local node.

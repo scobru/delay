@@ -22,8 +22,8 @@ export function generateOpenAPISpec(baseUrl: string = "http://localhost:8421"): 
       description:
         "Complete API documentation for Delay. Test endpoints directly from the interactive documentation.",
       contact: {
-        name: "Shogun Project",
-        url: "https://github.com/scobru/shogun",
+        name: "Delay Project",
+        url: "https://github.com/scobru/delay",
       },
       license: {
         name: "MIT",
@@ -380,7 +380,7 @@ export function generateOpenAPISpec(baseUrl: string = "http://localhost:8421"): 
                           hint: {
                             type: "string",
                             example:
-                              "Sign 'I Love Shogun' with your wallet and provide X-Wallet-Signature header",
+                              "Sign 'I Love Delay' with your wallet and provide X-Wallet-Signature header",
                           },
                         },
                       },

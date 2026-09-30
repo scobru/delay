@@ -38,7 +38,7 @@ import { startWormholeCleanup } from "./utils/wormhole-cleanup";
 import { tokenAuthMiddleware } from "./middleware/token-auth";
 import { secureCompare, hashToken, createProductionErrorHandler, isOriginAllowed, validateAdminToken } from "./utils/security";
 
-import { ZEN_PATHS, getZenNode } from "./utils/zen-paths";
+import { ZEN_PATHS, cleanupLegacyShogunNode, getZenNode } from "./utils/zen-paths";
 
 import { gunAliasGuard } from "./middleware/gun-alias-guard";
 import { latchDomain } from "./utils/zen-network";
@@ -907,6 +907,9 @@ async function initializeServer() {
 
   // Set up relay stats database
   const db = getZenNode(zen, ZEN_PATHS.RELAYS).get(host);
+
+  // Clean up legacy deprecated shogun entries if previously written
+  cleanupLegacyShogunNode(zen, host);
 
   // Pulse stats are now driven by StatsTracker
 

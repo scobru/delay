@@ -8,7 +8,7 @@ const router: Router = express.Router();
 
 /**
  * GET /api/v1/network/relays
- * Returns a list of discovered relays from the network (Gun shogun/network/relays)
+ * Returns a list of discovered relays from the network (Gun delay/network/relays)
  * supplemented with locally discovered ZEN peers.
  */
 router.get("/relays", tokenAuthMiddleware, async (req: Request, res: Response) => {
@@ -44,22 +44,33 @@ router.get("/relays", tokenAuthMiddleware, async (req: Request, res: Response) =
       }
     });
 
-    // Fetch relays from the Gun global discovery path
+    // Fetch relays from the Gun global discovery path (delay/network/relays)
     const relaysNode = getZenNode(gun, ZEN_PATHS.RELAYS);
     
     // Use a timeout for Gun once() to avoid hanging if the network is slow
-    const gunData = await new Promise<any>((resolve) => {
-      const timer = setTimeout(() => resolve(null), 5000);
-      relaysNode.once((data: any) => {
-        clearTimeout(timer);
-        resolve(data);
-      });
-    });
+    const [gunData, legacyGunData] = await Promise.all([
+      new Promise<any>((resolve) => {
+        const timer = setTimeout(() => resolve(null), 3000);
+        relaysNode.once((data: any) => {
+          clearTimeout(timer);
+          resolve(data);
+        });
+      }),
+      new Promise<any>((resolve) => {
+        // Fallback for legacy shogun network during migration
+        const timer = setTimeout(() => resolve(null), 1500);
+        getZenNode(gun, "shogun/network/relays").once((data: any) => {
+          clearTimeout(timer);
+          resolve(data);
+        });
+      })
+    ]);
 
-    if (gunData) {
-      Object.keys(gunData).forEach(key => {
-        if (key === '_' || key === '#') return;
-        const item = gunData[key];
+    const addRelaysFromData = (data: any, sourceName: string) => {
+      if (!data) return;
+      Object.keys(data).forEach(key => {
+        if (key === '_' || key === '#' || !data[key]) return;
+        const item = data[key];
         
         // Prevent duplicates if already in discoveredRelays
         const exists = discoveredRelays.some(r => r.host === key || r.endpoint === key);
@@ -72,7 +83,7 @@ router.get("/relays", tokenAuthMiddleware, async (req: Request, res: Response) =
             lastSeen: item.lastSeen || Date.now(),
             uptime: item.uptime || 0,
             connections: item.connections || { active: 0 },
-            source: 'gun-network'
+            source: sourceName
           });
         } else if (typeof item === 'string') {
           discoveredRelays.push({
@@ -81,11 +92,14 @@ router.get("/relays", tokenAuthMiddleware, async (req: Request, res: Response) =
             lastSeen: Date.now(),
             uptime: 0,
             connections: { active: 0 },
-            source: 'gun-network'
+            source: sourceName
           });
         }
       });
-    }
+    };
+
+    addRelaysFromData(gunData, 'gun-network');
+    addRelaysFromData(legacyGunData, 'legacy-network');
 
     res.json({
       success: true,

@@ -257,7 +257,7 @@ function GraphExplorer() {
             <div className="text-center p-8 text-base-content/50 flex flex-col gap-2 items-center justify-center">
               <span className="text-4xl">🔍</span>
               <p className="font-medium text-lg">Enter a ZenDB node path in the search box above to start exploring</p>
-              <p className="text-sm opacity-75">For example: shogun, shogun/network/relays, or any custom path.</p>
+              <p className="text-sm opacity-75">For example: delay, delay/network/relays, or any custom path.</p>
             </div>
           ) : !data || Object.keys(data).length === 0 ? (
             <div className="text-center p-8 text-base-content/50">

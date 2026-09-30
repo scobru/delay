@@ -1,45 +1,50 @@
 /**
- * Unified ZenDB paths for the Shogun network
+ * Unified ZenDB paths for the Delay network
  *
- * These paths are shared between delay and shogun-mule
+ * These paths are shared between delay services
  * to ensure consistent network discovery and communication.
  *
  * NOTE: This is a copy for the dashboard frontend. Keep in sync with
- * relay/src/utils/gun-paths.ts (or zen-paths.ts)
+ * relay/src/utils/zen-paths.ts
  */
 
 export const ZEN_PATHS = {
   // Base
-  SHOGUN: "shogun",
-  SHOGUN_INDEX: "shogun/index",
+  DELAY: "delay",
+  DELAY_INDEX: "delay/index",
+
+  // Legacy/Compatibility aliases
+  SHOGUN: "delay",
+  SHOGUN_INDEX: "delay/index",
 
   // Network discovery
-  RELAYS: "shogun/network/relays",
-  PEERS: "shogun/network/peers",
+  RELAYS: "delay/network/relays",
+  PEERS: "delay/network/peers",
 
   // Search index
-  SEARCH: "shogun/network/search",
+  SEARCH: "delay/network/search",
 
   // User data
-  USERS: "shogun/users",
-  UPLOADS: "shogun/uploads",
-  LOGS: "shogun/logs",
-  MB_USAGE: "shogun/mbUsage",
-  TEST: "shogun/test",
+  USERS: "delay/users",
+  UPLOADS: "delay/uploads",
+  LOGS: "delay/logs",
+  MB_USAGE: "delay/mbUsage",
+  TEST: "delay/test",
 
   // System
-  SYSTEM_HASH: "shogun/systemhash",
+  SYSTEM_HASH: "delay/systemhash",
 
-  // Indexes (unified under shogun/index)
-  DEALS_BY_CID: "shogun/index/deals-by-cid",
-  DEALS_BY_CLIENT: "shogun/index/deals-by-client",
+  // Indexes (unified under delay/index)
+  DEALS_BY_CID: "delay/index/deals-by-cid",
+  DEALS_BY_CLIENT: "delay/index/deals-by-client",
 
-  // Anna's Archive (torrent preservation network) - unified under shogun/
-  ANNAS_ARCHIVE: "shogun/annas-archive",
+  // Anna's Archive (torrent preservation network) - unified under delay/
+  ANNAS_ARCHIVE: "delay/annas-archive",
 
   // Wormhole
-  SHOGUN_WORMHOLE: "shogun/wormhole",
-  WORMHOLE_TRANSFERS: "transfers", // Relative to SHOGUN_WORMHOLE
+  DELAY_WORMHOLE: "delay/wormhole",
+  SHOGUN_WORMHOLE: "delay/wormhole",
+  WORMHOLE_TRANSFERS: "transfers", // Relative to DELAY_WORMHOLE
 } as const;
 
 

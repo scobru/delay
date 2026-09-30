@@ -529,12 +529,12 @@ function Settings() {
           <p className="text-base-content/70">
             Delay Dashboard — Part of the{" "}
             <a
-              href="https://github.com/scobru/shogun"
+              href="https://github.com/scobru/delay"
               target="_blank"
               rel="noopener noreferrer"
               className="link link-primary"
             >
-              Shogun Project
+              Delay Project
             </a>
           </p>
         </div>

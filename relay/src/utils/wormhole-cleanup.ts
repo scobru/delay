@@ -134,10 +134,20 @@ async function runWormholeCleanup(zen: any): Promise<void> {
         }
 
         // Remove from Zen index
-        getZenNode(zen, ZEN_PATHS.SHOGUN_WORMHOLE)
+        getZenNode(zen, ZEN_PATHS.DELAY_WORMHOLE)
           .get(ZEN_PATHS.WORMHOLE_TRANSFERS)
           .get(code)
           .put(null as any);
+
+        // Also clean legacy shogun wormhole index if present
+        try {
+          getZenNode(zen, "shogun/wormhole")
+            .get(ZEN_PATHS.WORMHOLE_TRANSFERS)
+            .get(code)
+            .put(null as any);
+        } catch {
+          // ignore
+        }
 
         // Remove transfer metadata
         zen.get(code).put(null as any);
@@ -189,10 +199,20 @@ async function getWormholeTransfers(
       });
     };
 
-    getZenNode(zen, ZEN_PATHS.SHOGUN_WORMHOLE)
+    getZenNode(zen, ZEN_PATHS.DELAY_WORMHOLE)
       .get(ZEN_PATHS.WORMHOLE_TRANSFERS)
       .map()
       .once(handler);
+
+    // Also check legacy path for backwards compatibility
+    try {
+      getZenNode(zen, "shogun/wormhole")
+        .get(ZEN_PATHS.WORMHOLE_TRANSFERS)
+        .map()
+        .once(handler);
+    } catch {
+      // ignore
+    }
 
     // Wait a bit for all data to come in
     timeout = setTimeout(() => {

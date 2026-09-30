@@ -13,7 +13,7 @@ const pageTitles: Record<string, { title: string; description: string }> = {
   "/charts": { title: "Analytics", description: "Historical data and usage trends" },
   "/visual-graph": { title: "Network Graph", description: "Interactive 3D graph visualization" },
   "/graph-explorer": { title: "Graph Navigator", description: "Explore nodes and relations" },
-  "/api-docs": { title: "API Reference", description: "Documentation for Shogun Relay API" },
+  "/api-docs": { title: "API Reference", description: "Documentation for Delay Relay API" },
 };
 
 function Header() {
@@ -21,7 +21,7 @@ function Header() {
   const { theme, toggleTheme } = useTheme();
   const { isAuthenticated, logout } = useAuth();
 
-  const pageInfo = pageTitles[location.pathname] || { title: "Dashboard", description: "Shogun Infrastructure" };
+  const pageInfo = pageTitles[location.pathname] || { title: "Dashboard", description: "Delay Infrastructure" };
 
   return (
     <header className="navbar bg-base-100/80 backdrop-blur-lg border-b border-base-300 px-6 h-20 sticky top-0 z-30 transition-all duration-300">

@@ -40,7 +40,8 @@ vi.mock("../config/env-config", () => ({
 
 vi.mock("../utils/zen-paths", () => ({
   ZEN_PATHS: {
-    SHOGUN: "shogun",
+    DELAY: "delay",
+    SHOGUN: "delay",
     LOGS: "logs",
   },
   getZenNode: vi.fn(() => ({

@@ -10,11 +10,12 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
-const THEME_KEY = 'shogun-dashboard-theme'
+const THEME_KEY = 'delay-dashboard-theme'
+const LEGACY_THEME_KEY = 'shogun-dashboard-theme'
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem(THEME_KEY)
+    const saved = localStorage.getItem(THEME_KEY) || localStorage.getItem(LEGACY_THEME_KEY)
     if (saved === 'light' || saved === 'dark') return saved
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })

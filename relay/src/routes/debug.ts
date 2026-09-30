@@ -1,6 +1,6 @@
 import express, { Request, Response, Router } from "express";
 import { loggers } from "../utils/logger";
-import { ZEN_PATHS } from "../utils/zen-paths";
+import { ZEN_PATHS, getZenNode } from "../utils/zen-paths";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
 
 const router: Router = express.Router();
@@ -25,7 +25,7 @@ router.get("/test-gun", adminAuthMiddleware, async (req: Request, res: Response)
       message: "Gun test successful",
     };
 
-    const testNode = gun.get(ZEN_PATHS.TEST);
+    const testNode = getZenNode(gun, ZEN_PATHS.TEST);
 
     const writeTest = () => {
       return new Promise((resolve, reject) => {
@@ -102,7 +102,7 @@ router.get(
         test: true,
       };
 
-      const testNode = gun.get(ZEN_PATHS.UPLOADS).get(identifier).get(hash);
+      const testNode = getZenNode(gun, ZEN_PATHS.UPLOADS).get(identifier).get(hash);
 
       const writeTest = () => {
         return new Promise((resolve, reject) => {

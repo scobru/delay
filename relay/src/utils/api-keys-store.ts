@@ -118,7 +118,7 @@ export async function generateApiKey(name: string): Promise<{ token: string; dat
 
   // Generate a random token
   const rawSecret = randomBytes(32).toString("base64url");
-  const token = `shogun-api-${rawSecret}`;
+  const token = `delay-api-${rawSecret}`;
 
   const keyId = `key_${randomBytes(8).toString("hex")}`;
   const keyPrefix = token.substring(0, 16) + "...";

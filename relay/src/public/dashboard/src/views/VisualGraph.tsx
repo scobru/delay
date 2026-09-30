@@ -229,7 +229,7 @@ function VisualGraph() {
             <div className="flex flex-col items-center justify-center h-full text-base-content/50 gap-2">
               <span className="text-4xl">🕸️</span>
               <p className="font-medium text-lg">Enter a ZenDB node path above to visualize the graph</p>
-              <p className="text-sm opacity-75">For example: shogun, shogun/network/relays, or any custom path.</p>
+              <p className="text-sm opacity-75">For example: delay, delay/network/relays, or any custom path.</p>
             </div>
           ) : (
             <Graph

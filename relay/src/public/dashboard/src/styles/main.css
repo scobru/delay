@@ -1,4 +1,4 @@
-/* Shogun Dashboard - CSS Variables & Global Styles */
+/* Delay Dashboard - CSS Variables & Global Styles */
 
 /* Tailwind CSS v4 */
 @import "tailwindcss";
@@ -88,6 +88,7 @@ body {
   @apply bg-gradient-to-br from-accent to-accent text-accent-content;
 }
 
+.delay-logo,
 .shogun-logo {
   filter: drop-shadow(0 0 8px oklch(var(--p)));
 }

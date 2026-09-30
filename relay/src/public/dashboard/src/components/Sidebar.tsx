@@ -199,7 +199,7 @@ function Sidebar() {
       <aside className="bg-base-200 min-h-screen w-64 flex flex-col border-r border-base-300">
         {/* Logo */}
         <div className="p-4 flex items-center gap-3 bg-base-300">
-          <img src={logoSvg} alt="Delay" className="w-10 h-10 shogun-logo" />
+          <img src={logoSvg} alt="Delay" className="w-10 h-10 delay-logo" />
           <div>
             <span className="font-bold text-lg">Delay</span>
             <p className="text-xs text-base-content/60">Relay Dashboard v1.3.1</p>
@@ -240,7 +240,7 @@ function Sidebar() {
         {/* Footer */}
         <div className="p-4 border-t border-base-300 bg-base-300/30">
           <a
-            href="https://github.com/scobru/shogun"
+            href="https://github.com/scobru/delay"
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-outline btn-sm w-full gap-2 border-base-content/10 hover:border-primary hover:bg-primary/10 hover:text-primary transition-all"

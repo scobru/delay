@@ -62,7 +62,7 @@ export async function adminOrApiKeyAuthMiddleware(
   }
 
   // If admin token fails, try API key authentication
-  if (token.startsWith("shogun-api-")) {
+  if (token.startsWith("delay-api-") || token.startsWith("shogun-api-")) {
     try {
       const keyData = await validateApiKey(token);
       if (keyData) {

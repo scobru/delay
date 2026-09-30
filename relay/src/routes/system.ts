@@ -125,7 +125,7 @@ router.get("/alldata", adminAuthMiddleware, (req, res) => {
     const gun = getZenInstance(req);
 
     // Get all data from Gun database
-    getZenNode(gun, ZEN_PATHS.SHOGUN).once((data: any) => {
+    getZenNode(gun, ZEN_PATHS.DELAY).once((data: any) => {
       res.json({
         success: true,
         data: data,
@@ -619,6 +619,28 @@ router.delete("/logs", adminAuthMiddleware, (req, res) => {
       success: false,
       error: error.message,
     });
+  }
+});
+
+// Clear deprecated legacy shogun namespace from Zen database
+router.delete("/legacy-shogun", adminAuthMiddleware, (req, res) => {
+  try {
+    const gun = getZenInstance(req);
+    gun.get("shogun").put(null as any, (ack: any) => {
+      if (ack && ack.err) {
+        loggers.server.error({ err: ack.err }, "❌ Error clearing deprecated shogun namespace");
+        return res.status(500).json({ success: false, error: ack.err });
+      }
+      loggers.server.info("🧹 Deprecated shogun namespace removed from Zen graph");
+      res.json({
+        success: true,
+        message: "Deprecated shogun namespace removed successfully",
+        timestamp: Date.now(),
+      });
+    });
+  } catch (error: any) {
+    loggers.server.error({ err: error }, "❌ Error clearing deprecated shogun namespace");
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
