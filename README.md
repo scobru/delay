@@ -40,7 +40,7 @@ git clone <repository-url>
 cd delay
 ./docker-start.sh
 
-curl http://localhost:8765/health
+curl http://localhost:8420/health
 ```
 
 ### CapRover Deployment
@@ -48,7 +48,7 @@ curl http://localhost:8765/health
 When deploying via CapRover, you **must** configure the Container HTTP Port in the app settings to correctly route NGINX traffic.
 
 1. Go to your CapRover Dashboard -> **Apps** -> **delay** -> **HTTP Settings**.
-2. Set **Container HTTP Port** to `8765`.
+2. Set **Container HTTP Port** to `8420`.
 3. Click **Save & Update**.
 
 *(Failure to do this will result in `502 Bad Gateway` or `504 Gateway Timeout` errors).*
@@ -61,7 +61,7 @@ npm install
 npm run start:dev
 ```
 
-Admin dashboards: `http://localhost:8765/`
+Admin dashboards: `http://localhost:8420/`
 
 ---
 
@@ -73,7 +73,7 @@ Create a `.env` file with essential variables:
 | ---------------- | -------------------------- | ----------------------- |
 | `ADMIN_PASSWORD` | Admin token for all routes | _(required)_            |
 | `IPFS_API_URL`   | IPFS API endpoint          | `http://127.0.0.1:5001` |
-| `RELAY_PORT`     | HTTP port                  | `8765`                  |
+| `RELAY_PORT`     | HTTP port                  | `8420`                  |
 
 See **[Environment Variables](./docs/ENVIRONMENT_VARIABLES.md)** for complete reference.
 
@@ -103,7 +103,7 @@ See **[Environment Variables](./docs/ENVIRONMENT_VARIABLES.md)** for complete re
 
 | Endpoint                   | Description               |
 | -------------------------- | ------------------------- |
-| `GET /gun`                 | WebSocket for Gun clients |
+| `GET /zen`                 | WebSocket for Zen clients |
 | `GET /health`              | Health check              |
 | `GET /api/v1/system/stats` | System statistics         |
 
@@ -152,7 +152,7 @@ delay/
 ## Troubleshooting
 
 | IPFS UDP buffer warning     | Increase host `net.core.rmem_max` to 7500000 |
-| Gun clients fail to connect | `wscat -c ws://localhost:8765/gun`            |
+| Zen clients fail to connect | `wscat -c ws://localhost:8420/zen`            |
 | IPFS API unauthorized       | Check `IPFS_API_TOKEN`                        |
 | Admin UI "token required"   | Enter token at `/admin` first                 |
 

@@ -60,7 +60,7 @@ case "${1:-docker}" in
         # Run the container
         docker run -d \
             --name delay-stack \
-            -p 8765:8765 \
+            -p 8420:8420 \
             -p 5001:5001 \
             -p 8080:8080 \
             -p 4001:4001 \
@@ -78,7 +78,7 @@ case "${1:-docker}" in
             print_success "Shogun Relay Stack is running!"
             echo ""
             echo "🌐 Services available at:"
-            echo "   • Relay Server:   http://localhost:8765"
+            echo "   • Relay Server:   http://localhost:8420"
             echo "   • IPFS API:      http://localhost:5001"
             echo "   • IPFS Gateway:  http://localhost:8080"
             echo ""
