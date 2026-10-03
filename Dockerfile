@@ -164,18 +164,25 @@ RUN set -ex \
     aarch64) ARCH_NAME="arm64" ;; \
     *) echo "Unsupported architecture: $ARCH"; exit 1 ;; \
     esac \
-    && IPFS_URL="https://dist.ipfs.tech/kubo/v${IPFS_VERSION}/kubo_v${IPFS_VERSION}_linux-${ARCH_NAME}.tar.gz" \
+    && IPFS_FILE="kubo_v${IPFS_VERSION}_linux-${ARCH_NAME}.tar.gz" \
+    && URLS="https://github.com/ipfs/kubo/releases/download/v${IPFS_VERSION}/${IPFS_FILE} https://dist.ipfs.tech/kubo/v${IPFS_VERSION}/${IPFS_FILE} https://ipfs.io/ipns/dist.ipfs.tech/kubo/v${IPFS_VERSION}/${IPFS_FILE}" \
     && echo "Downloading IPFS Kubo v${IPFS_VERSION} for ${ARCH_NAME}..." \
-    && echo "URL: ${IPFS_URL}" \
     && mkdir -p /tmp/ipfs-install \
     && cd /tmp/ipfs-install \
-    # Use curl with retry and better error handling
-    && for i in 1 2 3 4 5; do \
-    echo "Download attempt $i..." && \
-    curl -fsSL --retry 3 --retry-delay 5 -o kubo.tar.gz "${IPFS_URL}" && break || \
-    (echo "Attempt $i failed, waiting..." && sleep 10); \
-    done \
-    && test -f kubo.tar.gz || (echo "ERROR: Failed to download IPFS after 5 attempts" && exit 1) \
+    && DOWNLOADED=0 \
+    && for URL in $URLS; do \
+         echo "Attempting download from: $URL" && \
+         if curl -fsSL --connect-timeout 15 --max-time 180 --retry 2 --retry-delay 3 -o kubo.tar.gz "$URL"; then \
+           if tar -tzf kubo.tar.gz >/dev/null 2>&1; then \
+             DOWNLOADED=1 && echo "Successfully downloaded from $URL" && break; \
+           else \
+             echo "Corrupted archive from $URL, trying next mirror..."; rm -f kubo.tar.gz; \
+           fi; \
+         else \
+           echo "Failed to download from $URL, trying next mirror..."; \
+         fi; \
+       done \
+    && test "$DOWNLOADED" -eq 1 || (echo "ERROR: Failed to download IPFS Kubo from all mirrors" && exit 1) \
     && ls -lh kubo.tar.gz \
     && echo "Extracting IPFS..." \
     && tar -xzf kubo.tar.gz \
